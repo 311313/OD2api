@@ -171,15 +171,13 @@ export function createApp({ db: db_, cfg }) {
   admin.get('/version', async (req, res) => {
     const local = currentVersion(cfg);
 
-    // 只在 ?check=1 时打 GitHub（未认证 60 次/小时限流）
-    let remote = null;
-    if (req.query.check === '1') {
-      remote = await latestVersion();
-    }
+    // 默认读后台缓存；点"检查"时 force 刷新一次。
+    // 页面打开就能看到有没有新版本，不必手动触发。
+    const remote = await latestVersion({ force: req.query.check === '1' });
 
-    // 「有没有更新」看的是**部署版本** vs 远端：
+    // 「有没有更新」看部署版本 vs 远端：
     // 只改文档时 cron 会拉代码但不重建镜像，此时 deployed == latest，
-    // 镜像版本落后是正常的，不该报"有新版本"。
+    // 镜像落后是正常的，不该报"有新版本"。
     const basis = local.deployedSha || local.sha;
     const upToDate = remote?.ok ? remote.sha === basis : null;
 
@@ -188,10 +186,8 @@ export function createApp({ db: db_, cfg }) {
       pending: pendingUpdate(cfg),
       latest: remote,
       upToDate,
-      // 镜像落后于部署代码 = 需要重建容器才生效
-      needsRebuild: local.deployedSha
-        ? local.deployedSha !== local.sha
-        : null,
+      // 镜像落后于部署代码 = 有提交已拉取但容器还没重建
+      needsRebuild: local.deployedSha ? local.deployedSha !== local.sha : null,
     });
   });
 
@@ -1666,6 +1662,8 @@ export function trimByRetention(db_, cfg) {
 }
 
 /** 后台巡检：余额 + 模型 + 冷却到期清理 + 日志裁剪。 */
+import { startVersionPolling } from './version.js';
+
 export function startMaintenance({ db: db_, cfg }) {
   let stopped = false;
 
@@ -1710,11 +1708,16 @@ export function startMaintenance({ db: db_, cfg }) {
 
   const logTimer = setInterval(() => trimByRetention(db_, cfg), 3600_000);
 
+  // 后台查 GitHub 上的最新版本，供面板随时显示"有没有新版本"。
+  // 缓存 10 分钟，面板刷新不会打爆限流。
+  const versionPoll = startVersionPolling();
+
   return {
     stop() {
       stopped = true;
       clearInterval(balanceTimer);
       clearInterval(logTimer);
+      versionPoll.stop();
     },
   };
 }

@@ -2340,13 +2340,14 @@ async function loadVersion(check) {
   const updateBtn = $('verUpdate');
   if (!sha || !note) return;
 
-  // 加载态：别让用户看到破折号（那看起来像"读取失败"）
+  // 加载态：破折号看起来像"读取失败"，用省略号
   if (sha.textContent === '—' || sha.textContent === '') sha.textContent = '···';
 
   try {
+    // 后端已缓存远端查询结果，这里直接带回来，
+    // 所以页面打开就知道有没有新版本，不用手动点检查。
     const v = await api('/api/admin/version' + (check ? '?check=1' : ''));
 
-    // 显示部署代码版本（如果没有标记就退回镜像版本）
     const shown = v.deployedShort || v.shortSha || 'dev';
     sha.textContent = shown;
     sha.title = [
@@ -2356,42 +2357,55 @@ async function loadVersion(check) {
       `Node ${v.node || ''}`,
     ].filter(Boolean).join('\n');
 
-    // 有待处理的更新请求（宿主机还没执行）
+    // ① 有未处理的更新请求：宿主机还没接手
     if (v.pending?.pending) {
       note.className = 'ver-note warn';
       note.textContent = '更新已提交，等待宿主机执行…';
       updateBtn.hidden = true;
       return;
     }
-
-    if (!check) {
-      note.className = 'ver-note';
-      note.textContent = v.canSelfUpdate ? '' : '本地运行，不支持一键更新';
-      updateBtn.hidden = true;
+    // 陈旧的请求文件：提示但不挡路
+    if (v.pending?.stale) {
+      note.className = 'ver-note err';
+      note.textContent = '上次更新请求已超时（宿主机可能未执行）';
+      updateBtn.hidden = !v.canSelfUpdate;
       return;
     }
 
-    // 检查了远端
+    // ② 远端查询失败：不影响本地版本显示
     if (!v.latest?.ok) {
       note.className = 'ver-note err';
-      note.textContent = '检查失败：' + (v.latest?.error || '未知错误');
+      note.textContent = v.latest
+        ? '检查更新失败：' + (v.latest.error || '未知错误')
+        : '';
       updateBtn.hidden = true;
       return;
     }
 
-    if (v.upToDate) {
+    // ③ 有新版本 —— 主要目标：打开页面就能看见
+    if (v.upToDate === false) {
+      note.className = 'ver-note warn';
+      const msg = v.latest.message ? '：' + v.latest.message.slice(0, 36) : '';
+      note.textContent = `有新版本 ${v.latest.shortSha || ''}${msg}`;
+      updateBtn.hidden = !v.canSelfUpdate;
+      return;
+    }
+
+    // ④ 已最新
+    if (v.upToDate === true) {
       note.className = 'ver-note ok';
-      // 镜像落后于代码是正常现象（只改文档时不必重建），说明清楚免得用户困惑
+      // 镜像落后于部署代码是正常的：只改文档时不必重建容器
       note.textContent = v.needsRebuild
-        ? '代码已最新（纯文档变更，容器无需重建）'
+        ? '代码已最新（纯文档变更，无需重建）'
         : '已是最新';
       updateBtn.hidden = true;
-    } else {
-      note.className = 'ver-note warn';
-      note.textContent = '有新版本 ' + (v.latest.shortSha || '') +
-        (v.latest.message ? '：' + v.latest.message.slice(0, 40) : '');
-      updateBtn.hidden = !v.canSelfUpdate;
+      return;
     }
+
+    // ⑤ 状态未知（远端结果还没拿到）
+    note.className = 'ver-note';
+    note.textContent = v.canSelfUpdate ? '正在检查更新…' : '本地运行，不支持一键更新';
+    updateBtn.hidden = true;
   } catch (e) {
     sha.textContent = '—';
     note.className = 'ver-note err';
