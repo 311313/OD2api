@@ -22,6 +22,9 @@ services:
       - STRIP_EXTRA_FIELDS=${STRIP_EXTRA_FIELDS:-true}
       - REWRITE_MODEL_NAME=${REWRITE_MODEL_NAME:-true}
       - LOG_RETENTION_DAYS=${LOG_RETENTION_DAYS:-30}
+      # 宿主机完成 auto-update cron 配置后设为 1，面板才允许触发更新。
+      # 不设时按钮会提示"不支持自更新"，避免点了只空等。
+      - SELF_UPDATE=${SELF_UPDATE:-0}
     ports:
       # 只绑回环：对外暴露由使用者自己的反向代理或隧道负责
       - "127.0.0.1:7890:7890"
