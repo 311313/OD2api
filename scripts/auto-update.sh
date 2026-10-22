@@ -37,14 +37,17 @@ if [ "$FORCED" = 0 ]; then
   [ $((NOW - LAST)) -lt 270 ] && exit 0
 fi
 
-# 只部署发布分支；本地开发分支即使推到 GitHub 也不会被拉取。
-# 默认 main，可用 OD2API_DEPLOY_BRANCH 覆盖。
-DEPLOY_BRANCH="${OD2API_DEPLOY_BRANCH:-main}"
+# 只部署发布分支；本地开发（dev 等）即使推到 GitHub 也不会被拉取。
+# 默认接受 main 和 master —— 前者是 GitHub 默认名，后者是本部署实际用的名字。
+DEPLOY_BRANCHES="${OD2API_DEPLOY_BRANCHES:-main master}"
 BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
-if [ "$BRANCH" != "$DEPLOY_BRANCH" ]; then
-  echo "[$(date '+%F %T')] 当前分支 ${BRANCH:-未知} 非发布分支 ${DEPLOY_BRANCH}，跳过"
-  exit 0
-fi
+case " $DEPLOY_BRANCHES " in
+  *" $BRANCH "*) : ;;
+  *)
+    echo "[$(date '+%F %T')] 当前分支 ${BRANCH:-未知} 非发布分支，跳过（允许: $DEPLOY_BRANCHES）"
+    exit 0
+    ;;
+esac
 
 git fetch origin main --quiet 2>/dev/null || {
   echo "[$(date '+%F %T')] fetch 失败（网络）"
