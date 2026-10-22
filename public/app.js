@@ -2340,6 +2340,9 @@ async function loadVersion(check) {
   const updateBtn = $('verUpdate');
   if (!sha || !note) return;
 
+  // 加载态：别让用户看到破折号（那看起来像"读取失败"）
+  if (sha.textContent === '—' || sha.textContent === '') sha.textContent = '···';
+
   try {
     const v = await api('/api/admin/version' + (check ? '?check=1' : ''));
 
@@ -2390,6 +2393,7 @@ async function loadVersion(check) {
       updateBtn.hidden = !v.canSelfUpdate;
     }
   } catch (e) {
+    sha.textContent = '—';
     note.className = 'ver-note err';
     note.textContent = '版本读取失败';
   }
