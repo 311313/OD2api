@@ -2418,81 +2418,115 @@ function bindVersionCard() {
     }
     updateBtn.disabled = true;
     updateBtn.textContent = '正在触发…';
+
+    const note = $('verNote');
+    let tick = null;
+    let poll = null;
+    let hardTimeout = null;
+
+    // 单一状态机：所有文案通过它写，避免两个定时器互相覆盖导致闪烁
+    function setStatus(text, cls) {
+      if (note.textContent === text) return;   // 内容没变就不碰 DOM
+      note.textContent = text;
+      if (cls) note.className = 'ver-note ' + cls;
+    }
+    function stopAll() {
+      if (tick) { clearInterval(tick); tick = null; }
+      if (poll) { clearInterval(poll); poll = null; }
+      if (hardTimeout) { clearTimeout(hardTimeout); hardTimeout = null; }
+    }
+
+    /**
+     * 强制刷新：绕过浏览器缓存。
+     * location.reload() 会命中缓存的 index.html，导致加载回旧 JS；
+     * 加时间戳参数等于换了个 URL，必定回源。
+     */
+    function hardReload() {
+      setStatus('重建完成，正在刷新…', 'ok');
+      const url = new URL(location.href);
+      url.searchParams.set('_', Date.now());
+      setTimeout(() => location.replace(url.toString()), 600);
+    }
+
     try {
       await api('/api/admin/update', { method: 'POST' });
-
       updateBtn.hidden = true;
-      const note = $('verNote');
-      note.className = 'ver-note warn';
 
-      // ── 阶段 1：等宿主机 cron 接手（每分钟跑一次，最多等 75 秒）──
-      let waited = 0;
-      const tick = setInterval(() => {
-        waited += 1;
-        const left = Math.max(0, 75 - waited);
-        note.textContent = `已提交，等待宿主机接手… ${left}s`;
+      // 阶段 1：倒计时等 cron 接手（cron 每分钟一次）
+      let left = 75;
+      setStatus(`已提交，等待宿主机接手… ${left}s`, 'warn');
+      tick = setInterval(() => {
+        left -= 1;
+        if (left <= 0) {
+          // 倒计时结束仍未接手：转成不确定态，不再每秒改写
+          if (tick) { clearInterval(tick); tick = null; }
+          setStatus('宿主机尚未接手，继续等待…', 'warn');
+          return;
+        }
+        setStatus(`已提交，等待宿主机接手… ${left}s`, 'warn');
       }, 1000);
-      note.textContent = '已提交，等待宿主机接手… 75s';
 
-      // ── 阶段 2/3：轮询版本，捕捉"开始重建"和"重建完成"──
-      let downAt = 0;          // 首次连不上的时刻
+      // 阶段 2：轮询版本
+      let downAt = 0;
       let lastSha = null;
-      const poll = setInterval(async () => {
+      let finished = false;
+
+      poll = setInterval(async () => {
+        if (finished) return;
         try {
           const r = await fetch('/api/admin/version', {
             headers: token ? { 'x-admin-token': token } : {},
             cache: 'no-store',
           });
-          if (!r.ok) throw new Error('bad status');
+          if (!r.ok) throw new Error('bad');
 
-          // 连上了：如果之前断过，说明重建完成
+          // 之前断过 → 现在通了 = 重建完成
           if (downAt > 0) {
-            clearInterval(tick);
-            clearInterval(poll);
-            note.className = 'ver-note ok';
-            note.textContent = '重建完成，正在刷新…';
-            setTimeout(() => location.reload(), 800);
+            finished = true;
+            stopAll();
+            hardReload();
             return;
           }
 
           const v = await r.json();
 
-          // 触发文件已被消费 = 宿主机接手了
-          if (!v.pending?.pending) {
-            clearInterval(tick);
-            // 镜像版本变了 = 正在/已经重建
-            if (lastSha && v.shortSha !== lastSha) {
-              note.textContent = '重建完成，正在刷新…';
-              clearInterval(poll);
-              setTimeout(() => location.reload(), 800);
-              return;
-            }
-            note.textContent = v.needsRebuild === false
-              ? '已是最新，无需重建'
-              : '正在拉取代码…';
+          if (v.pending?.pending) {
+            setStatus('宿主机已接手，正在更新…', 'warn');
+          } else if (lastSha && v.shortSha !== lastSha) {
+            // 镜像版本变了 = 重建完成
+            finished = true;
+            stopAll();
+            hardReload();
+            return;
+          } else if (v.needsRebuild === false) {
+            setStatus('已是最新，无需重建', 'ok');
+            updateBtn.hidden = false;
+            updateBtn.disabled = false;
+            updateBtn.textContent = '立即更新';
+            stopAll();
+            return;
           } else {
-            note.textContent = '宿主机已接手，正在更新…';
+            setStatus('正在拉取代码…', 'warn');
           }
           lastSha = v.shortSha;
         } catch {
           // 连不上 = 容器正在重建
           if (downAt === 0) downAt = Date.now();
-          clearInterval(tick);
-          note.textContent = '正在重建容器…（面板短暂断连属正常）';
+          if (tick) { clearInterval(tick); tick = null; }
+          setStatus('正在重建容器…（面板短暂断连属正常）', 'warn');
         }
       }, 2000);
 
-      // 兜底：超过 5 分钟就停，别让用户干等
-      setTimeout(() => {
-        clearInterval(tick);
-        clearInterval(poll);
-        note.className = 'ver-note err';
-        note.textContent = '更新超时，请查看服务器日志或手动执行 scripts/auto-update.sh';
+      // 兜底超时
+      hardTimeout = setTimeout(() => {
+        stopAll();
+        setStatus('更新超时，请查看服务器日志或手动执行 scripts/auto-update.sh', 'err');
         updateBtn.hidden = false;
         updateBtn.disabled = false;
         updateBtn.textContent = '立即更新';
       }, 300000);
     } catch (e) {
+      stopAll();
       toast(String(e.message || e), true);
       updateBtn.disabled = false;
       updateBtn.textContent = '立即更新';
