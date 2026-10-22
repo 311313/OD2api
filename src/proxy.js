@@ -536,7 +536,8 @@ async function pipeStream(fwd, ctx) {
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
-      if (clientGone) break;
+      // 每轮都复查：客户端可能在上游两个 chunk 之间走掉
+      if (clientGone || res.destroyed) { clientGone = true; break; }
 
       buffer += decoder.decode(value, { stream: true });
 
@@ -558,12 +559,28 @@ async function pipeStream(fwd, ctx) {
             if (u.cached_tokens) cachedTokens = u.cached_tokens;
           },
         });
+        // 判断客户端是否真断开，必须三管齐下：
+        //   1) write 抛异常（socket 已销毁时会有 ERR_STREAM_DESTROYED）
+        //   2) write 返回 false 且 res.destroyed 为 true
+        //      （实测：客户端断开后 write 不抛错，只返回 false）
+        //   3) res.writableEnded —— 正常结束，不是断开
+        // 只靠 try/catch 会让 clientGone 永远为 false：
+        // 上游流被读完、额度白烧、日志还把 499 记成 200。
+        let wrote = true;
         try {
-          res.write(out);
+          wrote = res.write(out);
         } catch {
-          // 写不出去（EPIPE / socket 已销毁）——这才是真断开
           clientGone = true;
           break;
+        }
+        if (res.destroyed) {
+          clientGone = true;
+          break;
+        }
+        if (wrote === false && !res.writableEnded) {
+          // 背压（缓冲区满）不是断开，不能据此退出。
+          // 只有 destroyed 才是真断开，这里什么都不做，
+          // 交给下一次 write 或 destroyed 检查。
         }
       }
     }
@@ -571,6 +588,7 @@ async function pipeStream(fwd, ctx) {
     if (buffer.length) {
       try {
         res.write(buffer);
+        if (res.destroyed) clientGone = true;
       } catch {
         clientGone = true;
       }

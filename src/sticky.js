@@ -192,10 +192,20 @@ export function resolveSession(key, opts = {}) {
   return uid;
 }
 
-/** 手动绑定（用于重试后仍想留在原号的情况）。 */
+/**
+ * 手动绑定（用于重试后仍想留在原号的情况）。
+ *
+ * 必须保留已有的 createdAt：proxy 每次请求都会调这里刷新绑定，
+ * 若无条件重建对象，createdAt 会丢失，
+ * expired() 里 `e.createdAt && ...` 整段判断就被跳过，
+ * sticky.max_lifetime_ms 也就永远不生效（会话会被永久粘在同一个号上）。
+ */
 export function bindSession(key, uid, now = Date.now()) {
   if (!key || !uid) return;
-  entries.set(key, { uid, lastActive: now });
+  const prev = entries.get(key);
+  // 同号续绑 → 沿用原 createdAt；换号 → 从此刻重新计时
+  const createdAt = prev && prev.uid === uid && prev.createdAt ? prev.createdAt : now;
+  entries.set(key, { uid, lastActive: now, createdAt });
 }
 
 /**

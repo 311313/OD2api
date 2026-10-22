@@ -280,13 +280,34 @@ export function updateAccount(db, id, patch) {
   return getAccount(db, id);
 }
 
+/**
+ * 把多条写语句包成一个事务。
+ *
+ * node:sqlite 的 DatabaseSync 是同步 API，每次 run() 立即提交，
+ * 没有 better-sqlite3 那种 transaction() 包装器。
+ * 多语句写操作中途失败会留下半完成状态，所以这里手写 BEGIN/COMMIT。
+ */
+function inTransaction(db, fn) {
+  db.exec('BEGIN');
+  try {
+    const out = fn();
+    db.exec('COMMIT');
+    return out;
+  } catch (e) {
+    try { db.exec('ROLLBACK'); } catch { /* 事务可能已自动回滚 */ }
+    throw e;
+  }
+}
+
 export function deleteAccount(db, id) {
-  db.prepare('DELETE FROM accounts WHERE id = ?').run(id);
-  db.prepare('DELETE FROM account_models WHERE account_id = ?').run(id);
-  db.prepare('DELETE FROM usage_windows WHERE account_id = ?').run(id);
-  // 分组归属必须一起删。否则分组里留下指向已删账号的悬空 id，
-  // 界面上该分组会显示成「空分组」，而成员数永远对不上。
-  db.prepare('DELETE FROM account_group_members WHERE account_id = ?').run(id);
+  // 四条语句必须原子：中途失败会留下悬空的分组归属，
+  // 界面上该分组显示成「空分组」，成员数永远对不上。
+  inTransaction(db, () => {
+    db.prepare('DELETE FROM accounts WHERE id = ?').run(id);
+    db.prepare('DELETE FROM account_models WHERE account_id = ?').run(id);
+    db.prepare('DELETE FROM usage_windows WHERE account_id = ?').run(id);
+    db.prepare('DELETE FROM account_group_members WHERE account_id = ?').run(id);
+  });
 }
 
 // ── account_models ──────────────────────────────────────────
@@ -842,9 +863,12 @@ export function deleteGroup(db, id) {
 }
 
 export function setGroupMembers(db, groupId, accountIds) {
-  db.prepare('DELETE FROM account_group_members WHERE group_id = ?').run(groupId);
-  const stmt = db.prepare('INSERT OR IGNORE INTO account_group_members (group_id, account_id) VALUES (?, ?)');
-  for (const a of accountIds) stmt.run(groupId, a);
+  // 先删后插必须原子：插入阶段失败会让分组变空、账号全部脱离分组
+  inTransaction(db, () => {
+    db.prepare('DELETE FROM account_group_members WHERE group_id = ?').run(groupId);
+    const stmt = db.prepare('INSERT OR IGNORE INTO account_group_members (group_id, account_id) VALUES (?, ?)');
+    for (const a of accountIds) stmt.run(groupId, a);
+  });
 }
 
 // ── account categories ─────────────────────────────────────

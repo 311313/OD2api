@@ -166,7 +166,11 @@ export function pick(candidates, ctx) {
     const breakerUntil = a.breaker_until ? Date.parse(a.breaker_until) : 0;
     // 余额耗尽的硬冷却与额度触顶不参与兜底：调了必失败，浪费轮换并产生噪音日志
     if ((a.cool_kind === CoolKind.Hard || a.cool_kind === 'limit_reached') && coolUntil > now) continue;
-    if (a.balance_known && a.balance_micro_usd <= ctx.minBalanceUsd * 1e6) continue;
+    // 余额门槛必须和 healthy() 用同一个函数：账号级 min_balance_usd 优先。
+    // 写死 ctx.minBalanceUsd 会让设了更高门槛的号在兜底时被选中，
+    // 调了必失败，白白浪费一次轮换。
+    const gateUsd = accountBalanceGate(a, ctx);
+    if (a.balance_known && a.balance_micro_usd <= gateUsd * 1e6) continue;
     const exp = Math.min(coolUntil || Infinity, breakerUntil || Infinity);
     if (!Number.isFinite(exp)) continue;
     if (exp < bestExpiry) { bestExpiry = exp; best = a; }
