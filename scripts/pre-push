@@ -1,0 +1,11 @@
+#!/bin/sh
+# Git pre-push 钩子：推送前强制扫描敏感信息。
+# 安装：cp scripts/pre-push .git/hooks/pre-push && chmod +x .git/hooks/pre-push
+echo "[pre-push] 扫描敏感信息…"
+node scripts/check-secrets.mjs
+if [ $? -ne 0 ]; then
+  echo ""
+  echo "[pre-push] 已阻止推送。修复上述问题后重试。"
+  exit 1
+fi
+echo "[pre-push] 通过"
