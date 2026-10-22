@@ -67,6 +67,14 @@ fi
 SHA="$REMOTE"
 BT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
+# public/ 有变更时自动 bump 前端资源版本号，防止浏览器用缓存旧 JS
+if git diff --name-only "$LOCAL" "$REMOTE" -- public/ | grep -q .; then
+  NEWVER=$(date +%Y%m%d%H%M)
+  if sed -i "s/app\.js?v=[0-9]*/app.js?v=$NEWVER/" public/index.html 2>/dev/null; then
+    echo "[$(date '+%F %T')] 前端资源版本号 → $NEWVER"
+  fi
+fi
+
 echo "[$(date '+%F %T')] 重建容器 (${SHA:0:7})…"
 if ! sudo -n env GIT_SHA="$SHA" BUILD_TIME="$BT" \
       docker compose up -d --build 2>&1 | tail -3; then
