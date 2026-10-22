@@ -1312,7 +1312,22 @@ admin.get('/accounts/export', (req, res) => {
   // 静态面板
   // 静态面板。用 fileURLToPath 而不是 URL.pathname：
   // 后者在 Windows 上给出 /C:/... 这种带前导斜杠的路径，express.static 会 404。
-  app.use('/', express.static(fileURLToPath(new URL('../public', import.meta.url))));
+  app.use(
+    '/',
+    express.static(fileURLToPath(new URL('../public', import.meta.url)), {
+      setHeaders: (res, filePath) => {
+        // index.html 必须每次回源校验：它内部引用 app.js?v=xxx，
+        // 一旦被缓存，用户会持续拿到旧版本号并加载旧 JS，
+        // 表现为"代码明明更新了但页面没变"，只能手动强刷。
+        if (filePath.endsWith('.html')) {
+          res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+        } else {
+          // 带 ?v= 的静态资源可长缓存（版本号变则 URL 变）
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+      },
+    }),
+  );
 
   // 兜底 404（JSON）
   app.use((req, res) => {
