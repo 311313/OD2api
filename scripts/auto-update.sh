@@ -43,6 +43,8 @@ LOCAL=$(git rev-parse HEAD)
 REMOTE=$(git rev-parse origin/main)
 
 if [ "$LOCAL" = "$REMOTE" ]; then
+  # 首次部署或标记丢失时补上
+  [ -f "$APP/data/.deployed-sha" ] || echo "$LOCAL" > "$APP/data/.deployed-sha"
   [ "$FORCED" = 1 ] && echo "[$(date '+%F %T')] 已是最新 $(git rev-parse --short HEAD)"
   exit 0
 fi
@@ -54,6 +56,8 @@ CHANGED=$(git diff --name-only "$LOCAL" "$REMOTE" -- src/ public/ Dockerfile doc
 git reset --hard origin/main --quiet
 
 if [ -z "$CHANGED" ]; then
+  # 代码已同步但无需重建：写部署标记，面板据此知道"没有新版本"
+  echo "$REMOTE" > "$APP/data/.deployed-sha"
   echo "[$(date '+%F %T')] 仅文档/脚本变更，已拉取，无需重建"
   exit 0
 fi
@@ -86,6 +90,7 @@ for i in $(seq 1 12); do
 done
 
 if [ "$OK" = 1 ]; then
+  echo "$SHA" > "$APP/data/.deployed-sha"
   echo "[$(date '+%F %T')] ✓ 更新完成 ${SHA:0:7}（版本已验证）"
   rm -f /tmp/od.tar.gz
 else

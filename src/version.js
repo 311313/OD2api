@@ -1,50 +1,59 @@
 /**
  * 版本与更新检查。
  *
- * 两个概念：
- *   - 当前版本：镜像构建时注入（GIT_SHA / BUILD_TIME），运行期不变
- *   - 最新版本：查 GitHub API 拿远端 main 的 commit
+ * 三个概念要分清，否则面板会误导用户：
  *
- * 更新动作不能由容器自己做——容器无法重建自己。
- * 做法是写一个触发文件到 data/（挂载到宿主机 ./data），
- * 宿主机 cron 每分钟检查该文件，见到就跑 auto-update.sh。
+ *   镜像版本 (sha)      —— 容器里跑的代码，构建时注入，重启才变
+ *   部署版本 (deployed) —— 服务器 git HEAD，cron 拉取后立刻变
+ *   最新版本 (latest)   —— GitHub 远端 main 的 commit
+ *
+ * 判断"要不要更新"看的是 deployed vs latest。镜像版本落后于部署版本
+ * 是正常的：只改文档/脚本时不需要重建容器，此时 deployed == latest
+ * 但 sha != deployed，面板不该提示"有新版本"。
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 
 const REPO = '311313/OD2api';
 
-// 构建时注入；本地直接 node 跑时这两个为 undefined
 const BUILD_SHA = (process.env.GIT_SHA || '').trim();
 const BUILD_TIME = (process.env.BUILD_TIME || '').trim();
 
+// 服务器上仓库所在目录；容器内通常是 /app，宿主机路径通过挂载可见性未知，
+// 所以部署版本靠 /app/data/.deployed-sha 这个文件传递（auto-update.sh 写）。
+function deployedMarker(cfg) {
+  return path.join(cfg.dataDir, '.deployed-sha');
+}
+
+function readDeployed(cfg) {
+  try {
+    return fs.readFileSync(deployedMarker(cfg), 'utf8').trim();
+  } catch {
+    return '';
+  }
+}
+
 /** 当前运行的版本信息。 */
-export function currentVersion() {
+export function currentVersion(cfg) {
+  const deployed = readDeployed(cfg);
   return {
+    // 镜像里跑的代码
     sha: BUILD_SHA || 'dev',
     shortSha: BUILD_SHA ? BUILD_SHA.slice(0, 7) : 'dev',
     builtAt: BUILD_TIME || null,
+    // 服务器 git 拉到的代码（可能比镜像新）
+    deployedSha: deployed || null,
+    deployedShort: deployed ? deployed.slice(0, 7) : null,
     node: process.version,
-    // 触发文件所在目录（宿主机侧同名目录），用于判断"一键更新"能力是否可用
-    canSelfUpdate: hasTriggerDir(),
+    canSelfUpdate: hasTriggerDir(cfg),
   };
 }
 
-function triggerPath(cfg) {
-  return path.join(cfg.dataDir, '.update-request');
-}
-
-/**
- * 触发目录是否可写。
- *
- * data/ 在容器里是 /app/data，宿主机上是 ./data；
- * 能写说明挂载正常，宿主机 cron 也能看到我们写的文件。
- */
-function hasTriggerDir() {
-  const dir = process.env.DATA_DIR || path.resolve(process.cwd(), 'data');
+function hasTriggerDir(cfg) {
   try {
-    fs.accessSync(dir, fs.constants.W_OK);
+    fs.accessSync(cfg.dataDir, fs.constants.W_OK);
     return true;
   } catch {
     return false;
@@ -53,9 +62,7 @@ function hasTriggerDir() {
 
 /**
  * 查远端最新 commit。
- *
- * 走 GitHub 公开 API（仓库是公开的，不需要 token）。
- * 网络不通时返回 { ok:false }，前端显示"检查失败"而不是假版本号。
+ * 走 GitHub 公开 API，仓库公开时不需要 token。
  */
 export async function latestVersion(timeoutMs = 8000) {
   const ctl = new AbortController();
@@ -68,9 +75,7 @@ export async function latestVersion(timeoutMs = 8000) {
       },
       signal: ctl.signal,
     });
-    if (!res.ok) {
-      return { ok: false, error: `GitHub API ${res.status}` };
-    }
+    if (!res.ok) return { ok: false, error: `GitHub API ${res.status}` };
     const j = await res.json();
     return {
       ok: true,
@@ -86,25 +91,18 @@ export async function latestVersion(timeoutMs = 8000) {
   }
 }
 
-/**
- * 写更新触发文件。
- *
- * 幂等：已有文件则覆盖（只关心"有人要求更新"这个事实）。
- * 返回触发文件的 mtime 语义上等于"请求时间"。
- */
+/** 写更新触发文件。 */
 export function requestUpdate(cfg, by = 'panel') {
-  const p = triggerPath(cfg);
+  const p = path.join(cfg.dataDir, '.update-request');
   const payload = JSON.stringify({ at: new Date().toISOString(), by });
   fs.writeFileSync(p, payload, 'utf8');
-  return { requestedAt: JSON.parse(payload).at, file: p };
+  return { requestedAt: JSON.parse(payload).at };
 }
 
-/** 读当前是否有未处理的更新请求（前端显示"等待宿主机执行"）。 */
+/** 是否有未处理的更新请求。 */
 export function pendingUpdate(cfg) {
-  const p = triggerPath(cfg);
   try {
-    const raw = fs.readFileSync(p, 'utf8');
-    const j = JSON.parse(raw);
+    const j = JSON.parse(fs.readFileSync(path.join(cfg.dataDir, '.update-request'), 'utf8'));
     return { pending: true, requestedAt: j.at || null, by: j.by || null };
   } catch {
     return { pending: false };

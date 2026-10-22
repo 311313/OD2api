@@ -169,24 +169,34 @@ export function createApp({ db: db_, cfg }) {
 
   // ── 版本与更新 ──────────────────────────────
   admin.get('/version', async (req, res) => {
-    const local = currentVersion();
-    // 前端频繁轮询时会打爆 GitHub 限流（未认证 60 次/小时），
-    // 所以只在 ?check=1 时才真正查远端
+    const local = currentVersion(cfg);
+
+    // 只在 ?check=1 时打 GitHub（未认证 60 次/小时限流）
     let remote = null;
     if (req.query.check === '1') {
       remote = await latestVersion();
     }
+
+    // 「有没有更新」看的是**部署版本** vs 远端：
+    // 只改文档时 cron 会拉代码但不重建镜像，此时 deployed == latest，
+    // 镜像版本落后是正常的，不该报"有新版本"。
+    const basis = local.deployedSha || local.sha;
+    const upToDate = remote?.ok ? remote.sha === basis : null;
+
     res.json({
       ...local,
       pending: pendingUpdate(cfg),
       latest: remote,
-      // 有 remote 且 sha 不同 = 有更新
-      upToDate: remote?.ok ? remote.sha === local.sha : null,
+      upToDate,
+      // 镜像落后于部署代码 = 需要重建容器才生效
+      needsRebuild: local.deployedSha
+        ? local.deployedSha !== local.sha
+        : null,
     });
   });
 
   admin.post('/update', (req, res) => {
-    const v = currentVersion();
+    const v = currentVersion(cfg);
     if (!v.canSelfUpdate) {
       // 本地裸跑（没挂载 data）时无法触发宿主机脚本
       return res.status(400).json({

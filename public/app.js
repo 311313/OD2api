@@ -2343,9 +2343,12 @@ async function loadVersion(check) {
   try {
     const v = await api('/api/admin/version' + (check ? '?check=1' : ''));
 
-    sha.textContent = v.shortSha || 'dev';
+    // 显示部署代码版本（如果没有标记就退回镜像版本）
+    const shown = v.deployedShort || v.shortSha || 'dev';
+    sha.textContent = shown;
     sha.title = [
-      v.sha && v.sha !== 'dev' ? `完整: ${v.sha}` : '未注入构建版本（本地运行）',
+      v.sha && v.sha !== 'dev' ? `镜像版本: ${v.sha}` : '镜像未注入版本（本地运行）',
+      v.deployedSha ? `部署代码: ${v.deployedSha}` : '',
       v.builtAt ? `构建于 ${new Date(v.builtAt).toLocaleString()}` : '',
       `Node ${v.node || ''}`,
     ].filter(Boolean).join('\n');
@@ -2375,7 +2378,10 @@ async function loadVersion(check) {
 
     if (v.upToDate) {
       note.className = 'ver-note ok';
-      note.textContent = '已是最新';
+      // 镜像落后于代码是正常现象（只改文档时不必重建），说明清楚免得用户困惑
+      note.textContent = v.needsRebuild
+        ? '代码已最新（纯文档变更，容器无需重建）'
+        : '已是最新';
       updateBtn.hidden = true;
     } else {
       note.className = 'ver-note warn';
