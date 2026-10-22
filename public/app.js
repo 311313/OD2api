@@ -1559,12 +1559,16 @@ async function loadLogs() {
       const ok = r.status_code >= 200 && r.status_code < 300;
       const cls = ok ? 'ok' : r.error_class === 'client_closed' ? 'off' : 'err';
       // 缓存命中率：命中 token / 总输入 token。
-      // 保留一位小数——取整会把 99.1% 和 99.9% 都变成 99%。
-      const hitRate = r.prompt_tokens > 0 && r.cached_tokens > 0
-        ? ((r.cached_tokens / r.prompt_tokens) * 100).toFixed(1)
-        : '0.0';
+      //
+      // 一位小数会把 99.97% 显示成 "100.0%"，满屏 100 像统计坏了。
+      // 长上下文下 99.9x% 是常态（每次只追加几百 token，其余全命中），
+      // 所以 99.9 以上统一显示 ">99.9"，精确值放 tooltip。
+      const hitPct = r.prompt_tokens > 0 && r.cached_tokens > 0
+        ? (r.cached_tokens / r.prompt_tokens) * 100
+        : 0;
+      const hitRate = hitPct >= 99.9 ? '>99.9' : hitPct.toFixed(2);
       const cacheCell = r.cached_tokens > 0
-        ? `<span class="badge ok" title="命中 ${fmtNum(r.cached_tokens)} / ${fmtNum(r.prompt_tokens)}">${hitRate}%</span>`
+        ? `<span class="badge ok" title="命中 ${fmtNum(r.cached_tokens)} / ${fmtNum(r.prompt_tokens)}（${hitPct.toFixed(3)}%）">${hitRate}%</span>`
         : '<span class="hint">—</span>';
       const credits = Number(r.credits_used) || 0;
       const costUsd = Number(r.cost_usd) || 0;
