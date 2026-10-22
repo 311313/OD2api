@@ -19,8 +19,9 @@ Description=opendesign2api update (triggered by panel)
 Type=oneshot
 WorkingDirectory=%h/opendesign2api
 ExecStart=/usr/bin/env bash %h/opendesign2api/scripts/auto-update.sh
-# 同一时刻只跑一个实例
-ExecStartPre=-/usr/bin/flock -n /tmp/od2api-update.lock /bin/true
+# 防并发由脚本内部保证：exec 9> 锁文件 + flock -n 9，抢不到就静默退出。
+# 不要在这里加 ExecStartPre flock —— 它锁住后进程立刻结束、锁随即释放，
+# 对 ExecStart 没有任何保护作用。
 EOF
 
 echo "  ✓ service"

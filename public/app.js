@@ -2495,6 +2495,7 @@ function bindVersionCard() {
       let baseDeployed = null;
       let baseSha = null;
       let wentDown = false;
+      let idlePolls = 0;   // 连续无推进次数，用于"确实无事可做"的判定
 
       // 宿主机用 systemd path 监听触发文件，通常 1-2 秒内就开工，
       // 所以这里不需要倒计时，直接观察版本推进。
@@ -2519,16 +2520,28 @@ function bindVersionCard() {
 
           if (wentDown) { reload(); return; }
 
-          if (v.pending?.pending) { state = 'submitted'; render(); return; }
+          if (v.pending?.pending) { idlePolls = 0; state = 'submitted'; render(); return; }
 
           const codeMoved = curDeployed && baseDeployed && curDeployed !== baseDeployed;
           const imageMoved = curSha && baseSha && curSha !== baseSha;
 
           if (codeMoved && imageMoved) { reload(); return; }
-          if (codeMoved) { state = 'building'; render(); return; }
+          if (codeMoved) { idlePolls = 0; state = 'building'; render(); return; }
 
-          // 没有推进：可能是"已是最新，无需重建"
-          if (!codeMoved && v.upToDate === true && v.needsRebuild === false) {
+          // 没有推进。可能是：
+          //   a) 本来就没有新提交（远端 == 部署版本）
+          //   b) 宿主机正在 fetch/build，版本还没落地
+          // 用计数区分：连续 5 次（约 5 秒）都没 pending 也没推进，
+          // 且远端确认与部署一致，才判定"无需重建"。
+          // 否则会永远轮询到 6 分钟超时。
+          idlePolls += 1;
+
+          const nothingToDo =
+            !v.pending?.pending &&
+            v.upToDate === true &&
+            v.needsRebuild === false;
+
+          if (nothingToDo && idlePolls >= 5) {
             finish('已是最新，无需重建', 'ok');
             return;
           }

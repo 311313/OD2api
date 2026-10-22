@@ -16,7 +16,9 @@ set -uo pipefail
 
 APP="${OD2API_DIR:-$HOME/opendesign2api}"
 cd "$APP" || exit 1
-LOCK=/tmp/od2api-update.lock
+# 锁文件放 data 目录：/tmp 世界可写，别人可以预置符号链接指向任意文件，
+# exec 9>"$LOCK" 会以截断方式打开目标，等于给了本地用户破坏文件的能力。
+LOCK="$APP/data/.update.lock"
 TRIGGER="$APP/data/.update-request"
 STAMP="$APP/.last-fetch"
 
@@ -45,12 +47,15 @@ case " $DEPLOY_BRANCHES " in
   *" $BRANCH "*) : ;;
   *)
     echo "[$(date '+%F %T')] 当前分支 ${BRANCH:-未知} 非发布分支，跳过（允许: $DEPLOY_BRANCHES）"
+    # 请求已 mv 成 .inflight，跳过前必须放回，否则面板会一直等
+    [ -f "$TRIGGER.inflight" ] && mv -f "$TRIGGER.inflight" "$TRIGGER" 2>/dev/null
     exit 0
     ;;
 esac
 
 git fetch origin main --quiet 2>/dev/null || {
-  echo "[$(date '+%F %T')] fetch 失败（网络）"
+  echo "[$(date '+%F %T')] fetch 失败（网络），请求保留待重试"
+  [ -f "$TRIGGER.inflight" ] && mv -f "$TRIGGER.inflight" "$TRIGGER" 2>/dev/null
   exit 1
 }
 date +%s > "$STAMP"
@@ -69,12 +74,14 @@ echo "[$(date '+%F %T')] 有更新: $(git rev-parse --short "$LOCAL") → $(git 
 PREV="$LOCAL"
 
 # package.json/lock 变更也要重建：依赖变了但容器没重建会导致
-# 运行中的代码与 node_modules 不一致
-CHANGED=$(git diff --name-only "$LOCAL" "$REMOTE" \
-  -- src/ public/ Dockerfile docker-compose.yml package.json package-lock.json | head -1)
+# 运行中的代码与 node_modules 不一致。
+# 不用 `| head -1`：head 提前退出会让 git 收到 SIGPIPE 返回 141，
+# 配 set -o pipefail 时整条管道非 0，if 判为假、变更被静默忽略。
+CHANGED_LIST=$(git diff --name-only "$LOCAL" "$REMOTE" \
+  -- src/ public/ Dockerfile docker-compose.yml package.json package-lock.json)
 git reset --hard origin/main --quiet
 
-if [ -z "$CHANGED" ]; then
+if [ -z "$CHANGED_LIST" ]; then
   # 代码已同步但无需重建：写部署标记，面板据此知道"没有新版本"
   echo "$REMOTE" > "$APP/data/.deployed-sha"
   echo "[$(date '+%F %T')] 仅文档/脚本变更，已拉取，无需重建"
@@ -89,8 +96,9 @@ BT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo "[$(date '+%F %T')] 重建容器 (${SHA:0:7})…"
 if ! sudo -n env GIT_SHA="$SHA" BUILD_TIME="$BT" \
       docker compose up -d --build 2>&1 | tail -3; then
-  echo "[$(date '+%F %T')] ✗ 构建失败，回退"
+  echo "[$(date '+%F %T')] ✗ 构建失败，回退（请求保留待重试）"
   git reset --hard "$PREV" --quiet
+  [ -f "$TRIGGER.inflight" ] && mv -f "$TRIGGER.inflight" "$TRIGGER" 2>/dev/null
   exit 1
 fi
 

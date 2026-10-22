@@ -22,7 +22,14 @@ const BUILD_SHA = (process.env.GIT_SHA || '').trim();
 const BUILD_TIME = (process.env.BUILD_TIME || '').trim();
 
 // 后台查询间隔（毫秒）。GitHub 未认证 60 次/小时，10 分钟=6 次/小时，很安全。
-const POLL_MS = Number(process.env.VERSION_POLL_MINUTES || 10) * 60 * 1000;
+// 必须 clamp：环境变量写成 abc/0/负数会得到 NaN/0/负值，
+// NaN 让缓存判断恒为 false（每次请求都打 GitHub），
+// 0 或负值让 setInterval 变成高频轮询，几秒就打爆限流。
+const POLL_MS = (() => {
+  const raw = Number(process.env.VERSION_POLL_MINUTES);
+  const minutes = Number.isFinite(raw) && raw >= 1 ? Math.min(raw, 720) : 10;
+  return minutes * 60 * 1000;
+})();
 
 function deployedMarker(cfg) {
   return path.join(cfg.dataDir, '.deployed-sha');
@@ -156,8 +163,14 @@ export function requestUpdate(cfg, by = 'panel') {
   // 原子写：宿主机脚本会 rm 这个文件，直接 writeFileSync 的 truncate
   // 窗口里被删掉的话，写入会落进已 unlink 的 inode，请求凭空消失。
   const tmp = `${p}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, payload, 'utf8');
-  fs.renameSync(tmp, p);
+  try {
+    fs.writeFileSync(tmp, payload, 'utf8');
+    fs.renameSync(tmp, p);
+  } catch (e) {
+    // 写失败（磁盘满/权限）时别把 .tmp 留在挂载出来的 data 目录里
+    try { fs.unlinkSync(tmp); } catch { /* 本来就没写成 */ }
+    throw e;
+  }
   return { requestedAt: at };
 }
 
@@ -168,7 +181,11 @@ export function pendingUpdate(cfg) {
   try {
     const j = JSON.parse(fs.readFileSync(path.join(cfg.dataDir, '.update-request'), 'utf8'));
     const at = j.at || null;
-    const age = at ? Date.now() - new Date(at).getTime() : Infinity;
+    // 非法/缺失时间戳一律视为 stale：
+    // new Date('坏值') 得到 NaN，NaN > STALE_MS 为 false，
+    // 若不当成 stale，这条坏记录会让面板永久停在"等待宿主机执行"。
+    const ts = at ? new Date(at).getTime() : NaN;
+    const age = Number.isFinite(ts) ? Date.now() - ts : Infinity;
     if (age > STALE_MS) {
       return { pending: false, stale: true, requestedAt: at, by: j.by || null };
     }
