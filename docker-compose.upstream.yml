@@ -1,0 +1,18 @@
+# 可选：接入下游网关所在的 docker 网络。
+#
+# 用法：docker compose -f docker-compose.yml -f docker-compose.upstream.yml up -d --build
+# 前置：.env 里设置 UPSTREAM_NETWORK=<真实网络名>，且该网络已存在
+#
+# 单独拆出来是为了让主 compose 在没有任何前置条件下也能直接启动。
+services:
+  opendesign2api:
+    networks:
+      - default
+      - upstream
+
+networks:
+  default:
+    name: opendesign2api_default
+  upstream:
+    name: ${UPSTREAM_NETWORK:?UPSTREAM_NETWORK 未设置}
+    external: true

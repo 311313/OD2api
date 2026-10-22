@@ -51,7 +51,15 @@ export function currentVersion(cfg) {
   };
 }
 
+/**
+ * 能否自更新，靠正向证据判断，而不是"data 目录可写"这种推断。
+ *
+ * 容器里 /app/data 一定可写（Dockerfile chown 过），但宿主机可能根本
+ * 没装 cron —— 那样点更新就只会空等。所以要求显式声明 SELF_UPDATE=1
+ * （由 compose 从 .env 传入，宿主机确实配了 cron 才开）。
+ */
 function hasTriggerDir(cfg) {
+  if (String(process.env.SELF_UPDATE || '').toLowerCase() !== '1') return false;
   try {
     fs.accessSync(cfg.dataDir, fs.constants.W_OK);
     return true;
@@ -94,16 +102,30 @@ export async function latestVersion(timeoutMs = 8000) {
 /** 写更新触发文件。 */
 export function requestUpdate(cfg, by = 'panel') {
   const p = path.join(cfg.dataDir, '.update-request');
-  const payload = JSON.stringify({ at: new Date().toISOString(), by });
-  fs.writeFileSync(p, payload, 'utf8');
-  return { requestedAt: JSON.parse(payload).at };
+  const at = new Date().toISOString();
+  const payload = JSON.stringify({ at, by });
+  // 原子写：先写临时文件再 rename。
+  // 宿主机脚本会 rm 这个文件，直接 writeFileSync 的 truncate 窗口里
+  // 被删掉的话，写入会落进已 unlink 的 inode，请求凭空消失。
+  const tmp = `${p}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, payload, 'utf8');
+  fs.renameSync(tmp, p);
+  return { requestedAt: at };
 }
 
 /** 是否有未处理的更新请求。 */
+/** 超时未处理的请求视为失效，避免陈旧文件把面板永久锁在"等待执行"。 */
+const STALE_MS = 10 * 60 * 1000;
+
 export function pendingUpdate(cfg) {
   try {
     const j = JSON.parse(fs.readFileSync(path.join(cfg.dataDir, '.update-request'), 'utf8'));
-    return { pending: true, requestedAt: j.at || null, by: j.by || null };
+    const at = j.at || null;
+    const age = at ? Date.now() - new Date(at).getTime() : Infinity;
+    if (age > STALE_MS) {
+      return { pending: false, stale: true, requestedAt: at, by: j.by || null };
+    }
+    return { pending: true, requestedAt: at, by: j.by || null };
   } catch {
     return { pending: false };
   }
