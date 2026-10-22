@@ -1,0 +1,25 @@
+﻿node_modules/
+data/
+*.log
+.env
+.DS_Store
+
+# Credentials: never commit these (they hold production keys)
+.server-credentials.txt
+.test-keys.txt
+*.pem
+*.key
+
+# Local scratch
+.tmp/
+*.bak
+*.bak-*
+*~
+Thumbs.db
+
+# 鏈湴娴嬭瘯鎷夊彇鐨勭敓浜ц处鍙峰嚟鎹紙鍚?runtime_key锛?
+scripts/.local-test-acc.json
+scripts/.calib-acc.json
+
+# 涓汉杩愮淮鏂囨。锛氬惈涓嬫父缃戝叧鐨勯儴缃叉嫇鎵戯紝涓嶈繘浠撳簱
+docs/*-integration.md

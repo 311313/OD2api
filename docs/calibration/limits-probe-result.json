@@ -1,0 +1,98 @@
+[
+  {
+    "model": "claude-haiku-5.5",
+    "ok": true,
+    "maxOutput": null,
+    "contextWindow": ">=100000",
+    "maxOutErr": "{\"message\":\"[code=upstream_error] This endpoint's maximum context length is 1000000 tokens. However, you requested about 1000001 tokens (1 of text input, 1000000 in the output). Please reduce the length of either one, or use the context-compression plugin to compress your prompt automatically.\",\"type\":\"upstream_error\",\"code\":\"upstream_error\"}",
+    "ctxErr": null
+  },
+  {
+    "model": "deepseek-v4-flash",
+    "ok": true,
+    "maxOutput": null,
+    "contextWindow": ">=100000",
+    "maxOutErr": "{\"message\":\"[code=upstream_error] Invalid max_tokens value, the valid range of max_tokens is [1, 393216] (request_id: dfaf19e1-54a6-4663-89bc-1e79c8d07cc1)\",\"type\":\"invalid_request_error\",\"code\":\"upstream_error\"}",
+    "ctxErr": null
+  },
+  {
+    "model": "deepseek-v4-flash-vision-exp",
+    "ok": true,
+    "maxOutput": null,
+    "contextWindow": ">=100000",
+    "maxOutErr": "{\"message\":\"[code=upstream_error] Invalid max_tokens value, the valid range of max_tokens is [1, 393216] (request_id: 623ad590-5747-466a-be06-cf4c826bcf74)\",\"type\":\"invalid_request_error\",\"code\":\"upstream_error\"}",
+    "ctxErr": null
+  },
+  {
+    "model": "deepseek-v4-pro",
+    "ok": true,
+    "maxOutput": null,
+    "contextWindow": ">=100000",
+    "maxOutErr": "{\"message\":\"[code=upstream_error] Invalid max_tokens value, the valid range of max_tokens is [1, 393216] (request_id: 653278e6-fb1c-477a-941d-d68cb7764925)\",\"type\":\"invalid_request_error\",\"code\":\"upstream_error\"}",
+    "ctxErr": null
+  },
+  {
+    "model": "deepseek-v4.1-flash",
+    "ok": true,
+    "maxOutput": null,
+    "contextWindow": ">=100000",
+    "maxOutErr": "{\"message\":\"[code=upstream_error] Invalid max_tokens value, the valid range of max_tokens is [1, 393216] (request_id: 601000df-ff62-4d47-9daa-3c616eaaa97e)\",\"type\":\"invalid_request_error\",\"code\":\"upstream_error\"}",
+    "ctxErr": null
+  },
+  {
+    "model": "glm-5.3-flash",
+    "ok": true,
+    "maxOutput": ">=1000000",
+    "contextWindow": ">=100000",
+    "maxOutErr": null,
+    "ctxErr": null
+  },
+  {
+    "model": "glm-5.3-flashx",
+    "ok": true,
+    "maxOutput": ">=1000000",
+    "contextWindow": ">=100000",
+    "maxOutErr": null,
+    "ctxErr": null
+  },
+  {
+    "model": "gpt-6-luna",
+    "ok": true,
+    "maxOutput": ">=1000000",
+    "contextWindow": ">=100000",
+    "maxOutErr": null,
+    "ctxErr": null
+  },
+  {
+    "model": "hy4-preview",
+    "ok": true,
+    "maxOutput": ">=1000000",
+    "contextWindow": ">=100000",
+    "maxOutErr": null,
+    "ctxErr": null
+  },
+  {
+    "model": "kimi-k2.7-code",
+    "ok": true,
+    "maxOutput": null,
+    "contextWindow": ">=100000",
+    "maxOutErr": "{\"message\":\"[code=upstream_error] <400> InternalError.Algo.InvalidParameter: Range of max_tokens should be [1, 262144]\",\"type\":\"invalid_request_error\",\"code\":\"upstream_error\"}",
+    "ctxErr": null
+  },
+  {
+    "model": "mimo-v2.6-flash",
+    "ok": true,
+    "maxOutput": null,
+    "contextWindow": ">=100000",
+    "maxOutErr": "{\"message\":\"[code=upstream_error] provider API error (status 400)\",\"type\":\"upstream_error\",\"code\":\"upstream_error\"}",
+    "ctxErr": null
+  },
+  {
+    "model": "mimo-v2.6-pro",
+    "ok": true,
+    "maxOutput": ">=1000000",
+    "contextWindow": ">=100000",
+    "maxOutErr": null,
+    "ctxErr": null
+  }
+]

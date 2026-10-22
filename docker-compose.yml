@@ -1,0 +1,36 @@
+﻿services:
+  opendesign2api:
+    build: .
+    container_name: opendesign2api
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Shanghai
+      - PORT=7890
+      - DATA_DIR=/app/data
+      # 涓嬫父璋冪敤鏈綉鍏崇殑 key锛坰ub2api 娓犻亾閲屽～杩欎釜锛?
+      - GATEWAY_API_KEY=${GATEWAY_API_KEY:-}
+      # 绠＄悊闈㈡澘浠ょ墝锛堢暀绌哄垯闈㈡澘鍏嶇櫥褰曪紝浠呭缓璁厤鍚堝洖鐜闂級
+      - ADMIN_TOKEN=${ADMIN_TOKEN:-}
+      - MAX_ATTEMPTS=${MAX_ATTEMPTS:-4}
+      - MIN_BALANCE_USD=${MIN_BALANCE_USD:-0.0005}
+      - BALANCE_REFRESH_MINUTES=${BALANCE_REFRESH_MINUTES:-5}
+      - STRIP_EXTRA_FIELDS=${STRIP_EXTRA_FIELDS:-true}
+      - REWRITE_MODEL_NAME=${REWRITE_MODEL_NAME:-true}
+      - LOG_RETENTION_DAYS=${LOG_RETENTION_DAYS:-30}
+    ports:
+      # 涓庢湇鍔″櫒涓婂叾瀹?2api 椤圭洰涓€鑷达細鍙粦鍥炵幆锛岀敱 cloudflared / nginx 瀵瑰
+      - "127.0.0.1:7890:7890"
+    volumes:
+      - ./data:/app/data
+    networks:
+      - default
+      # 鍙€夛細鎺ュ叆涓嬫父缃戝叧鐨?docker 缃戠粶锛屼娇鍏惰兘鐢ㄥ鍣ㄥ悕鐩磋繛銆?
+      # 缃戠粶鍚嶉€氳繃鐜鍙橀噺娉ㄥ叆锛屼笉鍐欐浠讳綍鍏蜂綋閮ㄧ讲鎷撴墤銆?
+      #   http://opendesign2api:7890/v1
+      - ${UPSTREAM_NETWORK:-dummy}
+
+networks:
+  # 鐢变笅娓哥綉鍏崇殑 compose 鍒涘缓锛涘悕瀛楄蛋鐜鍙橀噺锛屼笉鐭ラ亾鏃舵寕涓€涓┖缃戠粶鍗犱綅
+  upstream:
+    name: ${UPSTREAM_NETWORK:-od2api-dummy}
+    external: true

@@ -1,0 +1,56 @@
+[
+  {
+    "model": "glm-5.3-flash",
+    "ok": true,
+    "tokens": 21970,
+    "rounds": 5,
+    "cachemiss": 5,
+    "credits": 20,
+    "perM": 910.3322712790168
+  },
+  {
+    "model": "deepseek-v4.1-flash",
+    "ok": true,
+    "tokens": 21584,
+    "rounds": 5,
+    "cachemiss": 5,
+    "credits": 20,
+    "perM": 926.6123054114158
+  },
+  {
+    "model": "deepseek-v4-flash",
+    "ok": true,
+    "tokens": 21598,
+    "rounds": 5,
+    "cachemiss": 5,
+    "credits": 97,
+    "perM": 4491.156588573016
+  },
+  {
+    "model": "deepseek-v4-pro",
+    "ok": true,
+    "tokens": 21905,
+    "rounds": 5,
+    "cachemiss": 5,
+    "credits": 292,
+    "perM": 13330.28988815339
+  },
+  {
+    "model": "gpt-6-luna",
+    "ok": true,
+    "tokens": 18461,
+    "rounds": 5,
+    "cachemiss": 5,
+    "credits": 100,
+    "perM": 5416.8246573858405
+  },
+  {
+    "model": "claude-haiku-5.5",
+    "ok": true,
+    "tokens": 0,
+    "rounds": 5,
+    "cachemiss": 5,
+    "credits": 0,
+    "perM": 0
+  }
+]

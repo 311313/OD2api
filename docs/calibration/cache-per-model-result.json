@@ -1,0 +1,236 @@
+[
+  {
+    "model": "glm-5.3-flash",
+    "ok": true,
+    "missUsage": {
+      "ok": true,
+      "prompt": 9657,
+      "cached": 0,
+      "completion": 13,
+      "reasoning": 10,
+      "total": 9670
+    },
+    "hitUsage": {
+      "ok": true,
+      "prompt": 9657,
+      "cached": 0,
+      "completion": 10,
+      "reasoning": 7,
+      "total": 9667
+    },
+    "c1": 8,
+    "c2": 8,
+    "missPerM": 827.300930713547,
+    "hitPerM": 827.5576704251578,
+    "hitRatio": 0,
+    "discount": 1
+  },
+  {
+    "model": "glm-5.3-flashx",
+    "ok": true,
+    "missUsage": {
+      "ok": true,
+      "prompt": 9721,
+      "cached": 0,
+      "completion": 10,
+      "reasoning": 7,
+      "total": 9731
+    },
+    "hitUsage": {
+      "ok": true,
+      "prompt": 9721,
+      "cached": 9664,
+      "completion": 21279,
+      "reasoning": 21275,
+      "total": 31000
+    },
+    "c1": 74,
+    "c2": 548,
+    "missPerM": 7604.5627376425855,
+    "hitPerM": 17677.419354838712,
+    "hitRatio": 0.9941364057195762,
+    "discount": 7.405405405405405
+  },
+  {
+    "model": "deepseek-v4.1-flash",
+    "ok": true,
+    "missUsage": {
+      "ok": true,
+      "prompt": 9449,
+      "cached": 0,
+      "completion": 3,
+      "reasoning": 3,
+      "total": 9452
+    },
+    "hitUsage": {
+      "ok": true,
+      "prompt": 9449,
+      "cached": 9216,
+      "completion": 3,
+      "reasoning": 3,
+      "total": 9452
+    },
+    "c1": 8,
+    "c2": 1,
+    "missPerM": 846.3817181548878,
+    "hitPerM": 105.79771476936098,
+    "hitRatio": 0.9753413059583025,
+    "discount": 0.125
+  },
+  {
+    "model": "deepseek-v4-flash",
+    "ok": true,
+    "missUsage": {
+      "ok": true,
+      "prompt": 9465,
+      "cached": 0,
+      "completion": 3,
+      "reasoning": 3,
+      "total": 9468
+    },
+    "hitUsage": {
+      "ok": true,
+      "prompt": 9465,
+      "cached": 9216,
+      "completion": 3,
+      "reasoning": 3,
+      "total": 9468
+    },
+    "c1": 42,
+    "c2": 3,
+    "missPerM": 4435.994930291508,
+    "hitPerM": 316.8567807351077,
+    "hitRatio": 0.9736925515055468,
+    "discount": 0.07142857142857142
+  },
+  {
+    "model": "mimo-v2.6-flash",
+    "ok": true,
+    "missUsage": {
+      "ok": true,
+      "prompt": 9702,
+      "cached": 0,
+      "completion": 15,
+      "reasoning": 12,
+      "total": 9717
+    },
+    "hitUsage": {
+      "ok": true,
+      "prompt": 9702,
+      "cached": 9600,
+      "completion": 15,
+      "reasoning": 12,
+      "total": 9717
+    },
+    "c1": 14,
+    "c2": 1,
+    "missPerM": 1440.7739014099,
+    "hitPerM": 102.91242152927859,
+    "hitRatio": 0.9894867037724181,
+    "discount": 0.07142857142857142
+  },
+  {
+    "model": "hy4-preview",
+    "ok": true,
+    "missUsage": {
+      "ok": true,
+      "prompt": 10093,
+      "cached": 0,
+      "completion": 16,
+      "reasoning": 16,
+      "total": 10109
+    },
+    "hitUsage": {
+      "ok": true,
+      "prompt": 10093,
+      "cached": 9984,
+      "completion": 16,
+      "reasoning": 16,
+      "total": 10109
+    },
+    "c1": 85,
+    "c2": 6,
+    "missPerM": 8408.348995944209,
+    "hitPerM": 593.5305173607676,
+    "hitRatio": 0.989200435945705,
+    "discount": 0.07058823529411765
+  },
+  {
+    "model": "gpt-6-luna",
+    "ok": true,
+    "missUsage": {
+      "ok": true,
+      "prompt": 8128,
+      "cached": 0,
+      "completion": 5,
+      "reasoning": 0,
+      "total": 8133
+    },
+    "hitUsage": {
+      "ok": true,
+      "prompt": 8128,
+      "cached": 8125,
+      "completion": 5,
+      "reasoning": 0,
+      "total": 8133
+    },
+    "c1": 44,
+    "c2": 4,
+    "missPerM": 5410.0577892536585,
+    "hitPerM": 491.8234353866962,
+    "hitRatio": 0.999630905511811,
+    "discount": 0.09090909090909091
+  },
+  {
+    "model": "kimi-k2.7-code",
+    "ok": true,
+    "missUsage": {
+      "ok": true,
+      "prompt": 9920,
+      "cached": 0,
+      "completion": 8,
+      "reasoning": 7,
+      "total": 9928
+    },
+    "hitUsage": {
+      "ok": true,
+      "prompt": 9920,
+      "cached": 9856,
+      "completion": 24,
+      "reasoning": 23,
+      "total": 9944
+    },
+    "c1": 95,
+    "c2": 21,
+    "missPerM": 9568.896051571313,
+    "hitPerM": 2111.8262268704743,
+    "hitRatio": 0.9935483870967742,
+    "discount": 0.22105263157894736
+  },
+  {
+    "model": "deepseek-v4-pro",
+    "ok": true,
+    "missUsage": {
+      "ok": true,
+      "prompt": 9563,
+      "cached": 0,
+      "completion": 3,
+      "reasoning": 3,
+      "total": 9566
+    },
+    "hitUsage": {
+      "ok": true,
+      "prompt": 9563,
+      "cached": 9472,
+      "completion": 3,
+      "reasoning": 3,
+      "total": 9566
+    },
+    "c1": 127,
+    "c2": 6,
+    "missPerM": 13276.186493832323,
+    "hitPerM": 627.2214091574326,
+    "hitRatio": 0.9904841576911011,
+    "discount": 0.047244094488188976
+  }
+]

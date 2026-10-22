@@ -1,0 +1,21 @@
+{
+  "name": "opendesign2api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Account-pool gateway: turns AI coding-service subscription accounts into an OpenAI-compatible endpoint with pooling, quota windows, request logs and an admin panel",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "deploy": "python scripts/deploy.py",
+    "verify:cost": "node scripts/verify-cost.mjs",
+    "verify:e2e": "node scripts/verify-e2e-cost.mjs",
+    "verify:quota": "node scripts/verify-quota-sync.mjs"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  },
+  "engines": {
+    "node": ">=22.5"
+  }
+}

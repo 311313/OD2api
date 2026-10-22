@@ -1,0 +1,11 @@
+﻿node_modules
+data
+.git
+*.log
+.env
+*.pem
+*.key
+.server-credentials.txt
+.test-keys.txt
+docs
+scripts
