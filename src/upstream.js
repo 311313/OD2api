@@ -27,7 +27,18 @@ export function classifyStatus(status, bodyText = '') {
   if (status === 401 || status === 403) return ErrClass.Auth;
   if (status === 429) return ErrClass.Quota;
   if (status === 402) return ErrClass.Quota;
-  if (status === 404) return ErrClass.Model;
+
+  if (status === 404) {
+    // 404 有两种完全不同的含义，必须区分：
+    //   a) 明确说 model 不存在 → 换模型即可，不该惩罚账号（Model 类不冷却）
+    //   b) 响应体为空/没提 model → 更像上游路径或路由变了，
+    //      原实现一律当 Model，账号永远不会被标记，
+    //      结果是每次请求都撞同一个坏号，日志里堆满 404 却不触发任何保护。
+    const t = String(bodyText || '').toLowerCase();
+    if (/model/.test(t)) return ErrClass.Model;
+    return ErrClass.Transient;
+  }
+
   if (status >= 500) return ErrClass.Transient;
   if (status === 400) {
     const t = String(bodyText).toLowerCase();
