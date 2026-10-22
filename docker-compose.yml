@@ -14,6 +14,7 @@ services:
       - DATA_DIR=/app/data
       # 下游调用本网关时使用的 key
       - GATEWAY_API_KEY=${GATEWAY_API_KEY:-}
+      # 管理面板令牌；留空则首次启动随机生成
       - ADMIN_TOKEN=${ADMIN_TOKEN:-}
       - MAX_ATTEMPTS=${MAX_ATTEMPTS:-4}
       - MIN_BALANCE_USD=${MIN_BALANCE_USD:-0.0005}
@@ -28,8 +29,16 @@ services:
       - ./data:/app/data
     networks:
       - default
+      # 可选：接入下游所在的 docker 网络，使其可用容器名直连本网关。
+      # 需要该网络已存在；不需要就保持 UPSTREAM_NETWORK 为默认值。
+      - upstream
 
 networks:
-  # 独立默认网络：不依赖任何外部前置条件，新部署可直接 up
   default:
     name: opendesign2api_default
+  upstream:
+    # 默认值指向一个独立网络，避免与 default 重名；
+    # 使用前先创建：docker network create od2api-upstream
+    # 或在 .env 里指定一个已存在的网络名。
+    name: ${UPSTREAM_NETWORK:-od2api-upstream}
+    external: true

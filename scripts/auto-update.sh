@@ -36,7 +36,6 @@ if [ "$FORCED" = 0 ]; then
   LAST=$(cat "$STAMP" 2>/dev/null || echo 0)
   [ $((NOW - LAST)) -lt 270 ] && exit 0
 fi
-date +%s > "$STAMP"
 
 # 只部署发布分支；本地开发分支即使推到 GitHub 也不会被拉取。
 # 默认 main，可用 OD2API_DEPLOY_BRANCH 覆盖。
@@ -84,14 +83,9 @@ fi
 SHA="$REMOTE"
 BT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-# 存在 override 时一起用（接入下游网络的生产环境需要）
-COMPOSE_ARGS="-f docker-compose.yml"
-[ -f docker-compose.upstream.yml ] && [ -n "${UPSTREAM_NETWORK:-}" ] && \
-  COMPOSE_ARGS="$COMPOSE_ARGS -f docker-compose.upstream.yml"
-
 echo "[$(date '+%F %T')] 重建容器 (${SHA:0:7})…"
 if ! sudo -n env GIT_SHA="$SHA" BUILD_TIME="$BT" \
-      docker compose $COMPOSE_ARGS up -d --build 2>&1 | tail -3; then
+      docker compose up -d --build 2>&1 | tail -3; then
   echo "[$(date '+%F %T')] ✗ 构建失败，回退"
   git reset --hard "$PREV" --quiet
   exit 1
@@ -119,6 +113,6 @@ else
   echo "[$(date '+%F %T')] ✗ 校验失败：期望 ${SHA:0:7}，实际 ${ACTUAL:-空}，回退"
   git reset --hard "$PREV" --quiet
   sudo -n env GIT_SHA="$PREV" BUILD_TIME="$BT" \
-    docker compose $COMPOSE_ARGS up -d --build 2>&1 | tail -2
+    docker compose up -d --build 2>&1 | tail -2
   echo "[$(date '+%F %T')] 已回退到 ${PREV:0:7}"
 fi
