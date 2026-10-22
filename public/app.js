@@ -2420,27 +2420,78 @@ function bindVersionCard() {
     updateBtn.textContent = '正在触发…';
     try {
       await api('/api/admin/update', { method: 'POST' });
+
+      updateBtn.hidden = true;
       const note = $('verNote');
       note.className = 'ver-note warn';
-      note.textContent = '已触发，等待宿主机拉取…';
-      updateBtn.hidden = true;
 
-      // 容器重建会短暂断连，轮询到重新可用再刷新页面
-      toast('更新已排队，容器将在 1 分钟内重建');
-      let tries = 0;
-      const timer = setInterval(async () => {
-        tries += 1;
+      // ── 阶段 1：等宿主机 cron 接手（每分钟跑一次，最多等 75 秒）──
+      let waited = 0;
+      const tick = setInterval(() => {
+        waited += 1;
+        const left = Math.max(0, 75 - waited);
+        note.textContent = `已提交，等待宿主机接手… ${left}s`;
+      }, 1000);
+      note.textContent = '已提交，等待宿主机接手… 75s';
+
+      // ── 阶段 2/3：轮询版本，捕捉"开始重建"和"重建完成"──
+      let downAt = 0;          // 首次连不上的时刻
+      let lastSha = null;
+      const poll = setInterval(async () => {
         try {
-          const r = await fetch('/health', { cache: 'no-store' });
-          if (r.ok && tries > 3) {
-            clearInterval(timer);
-            location.reload();
+          const r = await fetch('/api/admin/version', {
+            headers: token ? { 'x-admin-token': token } : {},
+            cache: 'no-store',
+          });
+          if (!r.ok) throw new Error('bad status');
+
+          // 连上了：如果之前断过，说明重建完成
+          if (downAt > 0) {
+            clearInterval(tick);
+            clearInterval(poll);
+            note.className = 'ver-note ok';
+            note.textContent = '重建完成，正在刷新…';
+            setTimeout(() => location.reload(), 800);
+            return;
           }
+
+          const v = await r.json();
+
+          // 触发文件已被消费 = 宿主机接手了
+          if (!v.pending?.pending) {
+            clearInterval(tick);
+            // 镜像版本变了 = 正在/已经重建
+            if (lastSha && v.shortSha !== lastSha) {
+              note.textContent = '重建完成，正在刷新…';
+              clearInterval(poll);
+              setTimeout(() => location.reload(), 800);
+              return;
+            }
+            note.textContent = v.needsRebuild === false
+              ? '已是最新，无需重建'
+              : '正在拉取代码…';
+          } else {
+            note.textContent = '宿主机已接手，正在更新…';
+          }
+          lastSha = v.shortSha;
         } catch {
-          /* 重建中断连属正常，继续等 */
+          // 连不上 = 容器正在重建
+          if (downAt === 0) downAt = Date.now();
+          clearInterval(tick);
+          note.textContent = '正在重建容器…（面板短暂断连属正常）';
         }
-        if (tries > 60) clearInterval(timer);   // 最多等 5 分钟
-      }, 5000);
+      }, 2000);
+
+      // 兜底：超过 5 分钟就停，别让用户干等
+      setTimeout(() => {
+        clearInterval(tick);
+        clearInterval(poll);
+        note.className = 'ver-note err';
+        note.textContent = '更新超时，请查看服务器日志或手动执行 scripts/auto-update.sh';
+        updateBtn.hidden = false;
+        updateBtn.disabled = false;
+        updateBtn.textContent = '立即更新';
+      }, 300000);
     } catch (e) {
       toast(String(e.message || e), true);
       updateBtn.disabled = false;
