@@ -1,4 +1,4 @@
-﻿services:
+services:
   opendesign2api:
     build:
       context: .
@@ -12,9 +12,9 @@
       - TZ=Asia/Shanghai
       - PORT=7890
       - DATA_DIR=/app/data
-      # 涓嬫父璋冪敤鏈綉鍏崇殑 key锛坰ub2api 娓犻亾閲屽～杩欎釜锛?
+      # 下游调用本网关时使用的 key
       - GATEWAY_API_KEY=${GATEWAY_API_KEY:-}
-      # 绠＄悊闈㈡澘浠ょ墝锛堢暀绌哄垯闈㈡澘鍏嶇櫥褰曪紝浠呭缓璁厤鍚堝洖鐜闂級
+      # 管理面板令牌；留空则首次启动随机生成
       - ADMIN_TOKEN=${ADMIN_TOKEN:-}
       - MAX_ATTEMPTS=${MAX_ATTEMPTS:-4}
       - MIN_BALANCE_USD=${MIN_BALANCE_USD:-0.0005}
@@ -23,21 +23,22 @@
       - REWRITE_MODEL_NAME=${REWRITE_MODEL_NAME:-true}
       - LOG_RETENTION_DAYS=${LOG_RETENTION_DAYS:-30}
     ports:
-      # 涓庢湇鍔″櫒涓婂叾瀹?2api 椤圭洰涓€鑷达細鍙粦鍥炵幆锛岀敱 cloudflared / nginx 瀵瑰
+      # 只绑回环：对外暴露由使用者自己的反向代理或隧道负责
       - "127.0.0.1:7890:7890"
     volumes:
       - ./data:/app/data
     networks:
       - default
-      # 可选：接入下游网关所在的 docker 网络，使其能用容器名直连本网关。
-      # 网络名由 .env 的 UPSTREAM_NETWORK 提供；留空则只挂在 default 上。
+      # 可选：接入下游所在的 docker 网络，使其可用容器名直连本网关。
+      # 需要该网络已存在；不需要就保持 UPSTREAM_NETWORK 为默认值。
       - upstream
 
 networks:
   default:
     name: opendesign2api_default
   upstream:
-    # 留空时 compose 会拒绝启动，所以给一个确定不存在的名字 + external，
-    # 只有 .env 里显式设置 UPSTREAM_NETWORK 时才真正接入。
-    name: ${UPSTREAM_NETWORK:-opendesign2api_standalone}
+    # 默认值指向一个独立网络，避免与 default 重名；
+    # 使用前先创建：docker network create od2api-upstream
+    # 或在 .env 里指定一个已存在的网络名。
+    name: ${UPSTREAM_NETWORK:-od2api-upstream}
     external: true

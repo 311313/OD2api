@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # opendesign2api 自动更新 + 面板一键更新。
 #
+# 只跟踪发布分支（默认 main）。本地开发请用其它分支，推到 GitHub 也不会
+# 被部署 —— 这样"本地在改"和"线上在跑"永远是两份代码。
+#
 # cron: */1 * * * * bash ~/opendesign2api/scripts/auto-update.sh >> ~/opendesign2api/auto-update.log 2>&1
 #
 # 关键点（踩过的坑）：
@@ -24,7 +27,8 @@ FORCED=0
 if [ -f "$TRIGGER" ]; then
   FORCED=1
   echo "[$(date '+%F %T')] 面板请求更新"
-  rm -f "$TRIGGER"
+  # 用 mv 消费而不是直接 rm：中途失败时能看出曾经有过请求
+  mv -f "$TRIGGER" "$TRIGGER.inflight" 2>/dev/null || rm -f "$TRIGGER"
 fi
 
 if [ "$FORCED" = 0 ]; then
@@ -32,12 +36,21 @@ if [ "$FORCED" = 0 ]; then
   LAST=$(cat "$STAMP" 2>/dev/null || echo 0)
   [ $((NOW - LAST)) -lt 270 ] && exit 0
 fi
-date +%s > "$STAMP"
+
+# 只部署发布分支；本地开发分支即使推到 GitHub 也不会被拉取。
+# 默认 main，可用 OD2API_DEPLOY_BRANCH 覆盖。
+DEPLOY_BRANCH="${OD2API_DEPLOY_BRANCH:-main}"
+BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+if [ "$BRANCH" != "$DEPLOY_BRANCH" ]; then
+  echo "[$(date '+%F %T')] 当前分支 ${BRANCH:-未知} 非发布分支 ${DEPLOY_BRANCH}，跳过"
+  exit 0
+fi
 
 git fetch origin main --quiet 2>/dev/null || {
   echo "[$(date '+%F %T')] fetch 失败（网络）"
   exit 1
 }
+date +%s > "$STAMP"
 
 LOCAL=$(git rev-parse HEAD)
 REMOTE=$(git rev-parse origin/main)
@@ -52,7 +65,10 @@ fi
 echo "[$(date '+%F %T')] 有更新: $(git rev-parse --short "$LOCAL") → $(git rev-parse --short "$REMOTE")"
 PREV="$LOCAL"
 
-CHANGED=$(git diff --name-only "$LOCAL" "$REMOTE" -- src/ public/ Dockerfile docker-compose.yml | head -1)
+# package.json/lock 变更也要重建：依赖变了但容器没重建会导致
+# 运行中的代码与 node_modules 不一致
+CHANGED=$(git diff --name-only "$LOCAL" "$REMOTE" \
+  -- src/ public/ Dockerfile docker-compose.yml package.json package-lock.json | head -1)
 git reset --hard origin/main --quiet
 
 if [ -z "$CHANGED" ]; then
@@ -66,14 +82,6 @@ fi
 # 用 env 前缀显式传给 sudo，比 export + -E 更可靠（cron 的 sudo 会清环境）
 SHA="$REMOTE"
 BT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-
-# public/ 有变更时自动 bump 前端资源版本号，防止浏览器用缓存旧 JS
-if git diff --name-only "$LOCAL" "$REMOTE" -- public/ | grep -q .; then
-  NEWVER=$(date +%Y%m%d%H%M)
-  if sed -i "s/app\.js?v=[0-9]*/app.js?v=$NEWVER/" public/index.html 2>/dev/null; then
-    echo "[$(date '+%F %T')] 前端资源版本号 → $NEWVER"
-  fi
-fi
 
 echo "[$(date '+%F %T')] 重建容器 (${SHA:0:7})…"
 if ! sudo -n env GIT_SHA="$SHA" BUILD_TIME="$BT" \
@@ -100,7 +108,7 @@ done
 if [ "$OK" = 1 ]; then
   echo "$SHA" > "$APP/data/.deployed-sha"
   echo "[$(date '+%F %T')] ✓ 更新完成 ${SHA:0:7}（版本已验证）"
-  rm -f /tmp/od.tar.gz
+  rm -f "$TRIGGER.inflight" /tmp/od.tar.gz
 else
   echo "[$(date '+%F %T')] ✗ 校验失败：期望 ${SHA:0:7}，实际 ${ACTUAL:-空}，回退"
   git reset --hard "$PREV" --quiet

@@ -1303,7 +1303,24 @@ admin.get('/accounts/export', (req, res) => {
   });
 
   admin.put('/settings', (req, res) => {
-    for (const [k, v] of Object.entries(req.body || {})) db.setSetting(db_, k, String(v));
+    // 敏感键只能走专用接口，不能经通用 settings 写入：
+    // admin.token 若在此被改，库与 cachedAdminToken 会分叉，
+    // 表现为"面板显示的令牌登不进去"。令牌请用 POST /token/rotate。
+    const PROTECTED = new Set(['admin.token']);
+    const rejected = [];
+    for (const [k, v] of Object.entries(req.body || {})) {
+      if (PROTECTED.has(k)) {
+        rejected.push(k);
+        continue;
+      }
+      db.setSetting(db_, k, String(v));
+    }
+    if (rejected.length) {
+      return res.status(400).json({
+        error: `protected setting: ${rejected.join(', ')}`,
+        hint: '用 POST /api/admin/token/rotate 轮换管理令牌',
+      });
+    }
     res.json(db.allSettings(db_));
   });
 
@@ -1312,19 +1329,28 @@ admin.get('/accounts/export', (req, res) => {
   // 静态面板
   // 静态面板。用 fileURLToPath 而不是 URL.pathname：
   // 后者在 Windows 上给出 /C:/... 这种带前导斜杠的路径，express.static 会 404。
+  // 带版本参数才允许长缓存：app.js?v=<hash> 的内容是确定的，
+  // 而裸 /app.js 没有版本保证，必须回源。
+  app.use((req, res, next) => {
+    if (!req.path.endsWith('.html') && req.query && req.query.v) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    }
+    next();
+  });
+
   app.use(
     '/',
     express.static(fileURLToPath(new URL('../public', import.meta.url)), {
-      setHeaders: (res, filePath) => {
-        // index.html 必须每次回源校验：它内部引用 app.js?v=xxx，
-        // 一旦被缓存，用户会持续拿到旧版本号并加载旧 JS，
-        // 表现为"代码明明更新了但页面没变"，只能手动强刷。
+      setHeaders: (res, filePath, stat) => {
+        // HTML 必须每次回源校验：它内部引用 app.js?v=xxx，
+        // 一旦被缓存，用户会持续拿到旧版本号并加载旧 JS。
         if (filePath.endsWith('.html')) {
           res.setHeader('Cache-Control', 'no-cache, must-revalidate');
-        } else {
-          // 带 ?v= 的静态资源可长缓存（版本号变则 URL 变）
-          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          return;
         }
+        // 其余资源默认也回源校验；只有带版本参数的请求才给长缓存，
+        // 这个判断在下面的中间件里做（setHeaders 拿不到 query）。
+        res.setHeader('Cache-Control', 'no-cache');
       },
     }),
   );
@@ -1416,9 +1442,12 @@ function adminTokenOf(db_, cfg) {
 }
 
 function safeEqual(a, b) {
-  const ba = Buffer.from(String(a));
-  const bb = Buffer.from(String(b));
-  if (ba.length !== bb.length) return false;
+  // 类型与空串必须显式拒绝：String(null)==='null' 会让字面量 "null" 通过
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  if (a.length === 0 || b.length === 0) return false;
+  const ba = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ba.length !== bb.length) return false;   // 长度差异可接受（令牌定长）
   return timingSafeEqual(ba, bb);
 }
 
