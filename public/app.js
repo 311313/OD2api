@@ -2328,3 +2328,147 @@ function bindTokenPage() {
   };
 }
 bindTokenPage();
+
+// ── 侧栏版本卡片 ──────────────────────────────
+/**
+ * 载入当前版本。默认不打远端（GitHub 未认证 60 次/小时限流），
+ * check=true 时才查最新 commit。
+ */
+async function loadVersion(check) {
+  const sha = $('verSha');
+  const note = $('verNote');
+  const updateBtn = $('verUpdate');
+  if (!sha || !note) return;
+
+  try {
+    const v = await api('/api/admin/version' + (check ? '?check=1' : ''));
+
+    sha.textContent = v.shortSha || 'dev';
+    sha.title = [
+      v.sha && v.sha !== 'dev' ? `完整: ${v.sha}` : '未注入构建版本（本地运行）',
+      v.builtAt ? `构建于 ${new Date(v.builtAt).toLocaleString()}` : '',
+      `Node ${v.node || ''}`,
+    ].filter(Boolean).join('\n');
+
+    // 有待处理的更新请求（宿主机还没执行）
+    if (v.pending?.pending) {
+      note.className = 'ver-note warn';
+      note.textContent = '更新已提交，等待宿主机执行…';
+      updateBtn.hidden = true;
+      return;
+    }
+
+    if (!check) {
+      note.className = 'ver-note';
+      note.textContent = v.canSelfUpdate ? '' : '本地运行，不支持一键更新';
+      updateBtn.hidden = true;
+      return;
+    }
+
+    // 检查了远端
+    if (!v.latest?.ok) {
+      note.className = 'ver-note err';
+      note.textContent = '检查失败：' + (v.latest?.error || '未知错误');
+      updateBtn.hidden = true;
+      return;
+    }
+
+    if (v.upToDate) {
+      note.className = 'ver-note ok';
+      note.textContent = '已是最新';
+      updateBtn.hidden = true;
+    } else {
+      note.className = 'ver-note warn';
+      note.textContent = '有新版本 ' + (v.latest.shortSha || '') +
+        (v.latest.message ? '：' + v.latest.message.slice(0, 40) : '');
+      updateBtn.hidden = !v.canSelfUpdate;
+    }
+  } catch (e) {
+    note.className = 'ver-note err';
+    note.textContent = '版本读取失败';
+  }
+}
+
+function bindVersionCard() {
+  const checkBtn = $('verCheck');
+  const updateBtn = $('verUpdate');
+  if (!checkBtn || !updateBtn) return;
+
+  checkBtn.onclick = async () => {
+    checkBtn.disabled = true;
+    checkBtn.textContent = '检查中';
+    await loadVersion(true);
+    checkBtn.disabled = false;
+    checkBtn.textContent = '检查';
+  };
+
+  updateBtn.onclick = async () => {
+    if (!confirm('拉取最新代码并重建容器？\n\n更新期间面板会短暂不可用（约 30-60 秒），完成后自动刷新。')) {
+      return;
+    }
+    updateBtn.disabled = true;
+    updateBtn.textContent = '正在触发…';
+    try {
+      await api('/api/admin/update', { method: 'POST' });
+      const note = $('verNote');
+      note.className = 'ver-note warn';
+      note.textContent = '已触发，等待宿主机拉取…';
+      updateBtn.hidden = true;
+
+      // 容器重建会短暂断连，轮询到重新可用再刷新页面
+      toast('更新已排队，容器将在 1 分钟内重建');
+      let tries = 0;
+      const timer = setInterval(async () => {
+        tries += 1;
+        try {
+          const r = await fetch('/health', { cache: 'no-store' });
+          if (r.ok && tries > 3) {
+            clearInterval(timer);
+            location.reload();
+          }
+        } catch {
+          /* 重建中断连属正常，继续等 */
+        }
+        if (tries > 60) clearInterval(timer);   // 最多等 5 分钟
+      }, 5000);
+    } catch (e) {
+      toast(String(e.message || e), true);
+      updateBtn.disabled = false;
+      updateBtn.textContent = '立即更新';
+    }
+  };
+}
+
+bindVersionCard();
+loadVersion(false);
+
+// ── 首次打开：免责声明 ──────────────────────────
+/**
+ * 只在首次访问时弹出，用户点确认后写入 localStorage。
+ * 用 <dialog> 原生模态：自带焦点捕获与 Esc 语义，不需要手写遮罩层级。
+ */
+function showDisclaimerOnce() {
+  const KEY = 'od2api_disclaimer_accepted';
+  try {
+    if (localStorage.getItem(KEY)) return;
+  } catch {
+    return;   // localStorage 不可用（隐私模式）就不弹，避免每次刷新都打扰
+  }
+
+  const dlg = $('disclaimerModal');
+  if (!dlg) return;
+
+  dlg.showModal();
+  // 不允许 Esc 或点遮罩关闭：必须显式确认
+  dlg.addEventListener('cancel', (e) => e.preventDefault());
+
+  const btn = $('acceptDisclaimer');
+  if (btn) {
+    btn.onclick = () => {
+      try { localStorage.setItem(KEY, '1'); } catch { /* ignore */ }
+      dlg.close();
+    };
+  }
+}
+
+showDisclaimerOnce();

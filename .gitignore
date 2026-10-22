@@ -1,4 +1,4 @@
-﻿node_modules/
+node_modules/
 data/
 *.log
 .env
@@ -23,3 +23,8 @@ scripts/.calib-acc.json
 
 # 涓汉杩愮淮鏂囨。锛氬惈涓嬫父缃戝叧鐨勯儴缃叉嫇鎵戯紝涓嶈繘浠撳簱
 docs/*-integration.md
+
+# 运维临时脚本（含服务器地址/凭据，绝不入库）
+scripts/_*.sh
+scripts/_*.py
+scripts/_*.cjs

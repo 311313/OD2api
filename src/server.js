@@ -8,6 +8,7 @@ import {
   fetchBalance, fetchModels, fetchBillingSummary, fetchModelCatalog,
   fetchPlanWindows, fetchWorkspace, forwardChat,
 } from './upstream.js';
+import { currentVersion, latestVersion, requestUpdate, pendingUpdate } from './version.js';
 import { unbindAccount, sessionCount, listSessions, gcSessions, startSessionGC } from './sticky.js';
 import {
   startDeviceAuth, pollDeviceToken, waitForDeviceAuth,
@@ -165,6 +166,42 @@ export function createApp({ db: db_, cfg }) {
     cachedAdminToken = t;   // 进程内缓存同步，其他请求不必再读库
     res.json({ token: t, rotated: true, note: '旧令牌已立即失效，请立即复制保存新令牌' });
   });
+
+  // ── 版本与更新 ──────────────────────────────
+  admin.get('/version', async (req, res) => {
+    const local = currentVersion();
+    // 前端频繁轮询时会打爆 GitHub 限流（未认证 60 次/小时），
+    // 所以只在 ?check=1 时才真正查远端
+    let remote = null;
+    if (req.query.check === '1') {
+      remote = await latestVersion();
+    }
+    res.json({
+      ...local,
+      pending: pendingUpdate(cfg),
+      latest: remote,
+      // 有 remote 且 sha 不同 = 有更新
+      upToDate: remote?.ok ? remote.sha === local.sha : null,
+    });
+  });
+
+  admin.post('/update', (req, res) => {
+    const v = currentVersion();
+    if (!v.canSelfUpdate) {
+      // 本地裸跑（没挂载 data）时无法触发宿主机脚本
+      return res.status(400).json({
+        error: 'self-update unavailable: data dir not writable',
+        hint: '容器部署下 data/ 需挂载到宿主机，宿主机 cron 读取 .update-request',
+      });
+    }
+    const r = requestUpdate(cfg, 'panel');
+    res.json({
+      ok: true,
+      requestedAt: r.requestedAt,
+      note: '宿主机 cron 将在一分钟内拉取并重建容器；期间面板会短暂不可用',
+    });
+  });
+
 
 
 

@@ -6,6 +6,12 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm ci --omit=dev --no-audit --no-fund || npm install --omit=dev --no-audit --no-fund
 
+# 构建期注入版本信息（由 auto-update.sh / deploy.py 传入）
+ARG GIT_SHA=""
+ARG BUILD_TIME=""
+ENV GIT_SHA=${GIT_SHA}
+ENV BUILD_TIME=${BUILD_TIME}
+
 COPY src ./src
 COPY public ./public
 

@@ -317,6 +317,48 @@ html,body{height:100%}
 /* 窄屏才隐藏次要列。这条必须在 media query 里，
    否则会在大屏也把列藏掉（曾经就是这个 bug）。 */
 @media(max-width:900px){.hide-sm{display:none}}
+
+/* ── 侧栏版本卡片 ── */
+.ver-card{margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.08)}
+.ver-row{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.ver-sha{font-size:11px;color:#94a3b8;letter-spacing:.02em}
+.ver-btn{
+  border:1px solid rgba(255,255,255,.14);background:transparent;color:#cbd5e1;
+  font-size:10px;padding:2px 7px;border-radius:5px;cursor:pointer;
+  transition:background-color .14s,border-color .14s,color .14s;
+}
+.ver-btn:hover{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.24);color:#e2e8f0}
+.ver-btn:disabled{opacity:.45;cursor:default}
+.ver-note{font-size:10px;color:#94a3b8;margin-top:5px;line-height:1.45;min-height:0}
+.ver-note.ok{color:#5eead4}
+.ver-note.warn{color:#fbbf24}
+.ver-note.err{color:#fca5a5}
+.ver-update{
+  width:100%;margin-top:7px;border:1px solid rgba(94,234,212,.4);
+  background:rgba(94,234,212,.14);color:#5eead4;font-size:11px;
+  padding:5px 0;border-radius:5px;cursor:pointer;
+  transition:background-color .14s,border-color .14s;
+}
+.ver-update:hover{background:rgba(94,234,212,.24);border-color:rgba(94,234,212,.6)}
+.ver-update:disabled{opacity:.5;cursor:default}
+
+/* ── 免责声明弹窗 ── */
+.dl-disc{max-width:440px;border:none;border-radius:12px;padding:0;overflow:hidden}
+.dl-disc::backdrop{background:rgba(15,23,42,.55);backdrop-filter:blur(2px)}
+.dl-disc-head{display:flex;align-items:center;gap:10px;padding:18px 22px 12px}
+.dl-disc-icon{
+  width:24px;height:24px;flex:none;border-radius:50%;
+  background:#fef3c7;color:#b45309;font-weight:700;font-size:14px;
+  display:flex;align-items:center;justify-content:center;
+}
+.dl-disc-head h2{margin:0;font-size:15px;font-weight:600;color:#0f172a}
+.dl-disc-body{padding:0 22px 4px;font-size:13px;line-height:1.7;color:#475569}
+.dl-disc-body p{margin:0 0 10px}
+.dl-disc-body ul{margin:0 0 12px;padding-left:18px}
+.dl-disc-body li{margin-bottom:4px}
+.dl-disc-body strong{color:#0f172a;font-weight:600}
+.dl-disc-small{font-size:12px;color:#94a3b8}
+.dl-disc-foot{padding:14px 22px 20px;display:flex;justify-content:flex-end}
 </style>
 </head>
 <body>
@@ -340,6 +382,15 @@ html,body{height:100%}
     <div class="side-foot">
       OpenAI 兼容端点<br>
       <span class="mono" id="endpoint">/v1</span>
+      <!-- 版本卡片：显示当前构建 + 检查/执行更新 -->
+      <div class="ver-card" id="verCard">
+        <div class="ver-row">
+          <span class="ver-sha mono" id="verSha" title="当前版本">—</span>
+          <button class="ver-btn" id="verCheck" type="button" title="检查更新">检查</button>
+        </div>
+        <div class="ver-note" id="verNote"></div>
+        <button class="ver-update" id="verUpdate" type="button" hidden>立即更新</button>
+      </div>
     </div>
   </aside>
 
@@ -1118,6 +1169,26 @@ html,body{height:100%}
     </div>
   </div>
 </div>
-<script type="module" src="/app.js?v=202610221226"></script>
+<script type="module" src="/app.js?v=202610221331"></script>
+<dialog id="disclaimerModal" class="dlg dl-disc">
+  <div class="dl-disc-head">
+    <span class="dl-disc-icon">!</span>
+    <h2>免责声明</h2>
+  </div>
+  <div class="dl-disc-body">
+    <p>本项目仅供<strong>个人学习与协议研究</strong>使用。</p>
+    <ul>
+      <li>上游服务条款可能不允许此类接入方式</li>
+      <li>使用该接入方式可能导致账号被限制或封禁</li>
+      <li>使用者自行承担全部后果，作者不承担任何责任</li>
+      <li>请勿用于商业转售或违反上游服务条款的场景</li>
+    </ul>
+    <p class="dl-disc-small">继续使用即表示你已阅读并接受上述条款。</p>
+  </div>
+  <div class="dl-disc-foot">
+    <button class="btn primary" id="acceptDisclaimer" type="button">我已了解，继续使用</button>
+  </div>
+</dialog>
+
 </body>
 </html>

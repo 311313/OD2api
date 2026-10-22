@@ -1,6 +1,11 @@
 ﻿services:
   opendesign2api:
-    build: .
+    build:
+      context: .
+      args:
+        # 版本信息由宿主机 auto-update.sh 传入；本地构建留空显示 dev
+        GIT_SHA: ${GIT_SHA:-}
+        BUILD_TIME: ${BUILD_TIME:-}
     container_name: opendesign2api
     restart: unless-stopped
     environment:
