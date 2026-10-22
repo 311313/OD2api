@@ -2427,7 +2427,7 @@ function bindVersionCard() {
   };
 
   updateBtn.onclick = async () => {
-    if (!confirm('拉取最新代码并重建容器？\n\n更新期间面板会短暂不可用（约 1-3 分钟），完成后自动刷新。')) {
+    if (!confirm('立即拉取最新代码并重建容器？\n\n面板会短暂不可用（约 10-60 秒），完成后自动刷新。')) {
       return;
     }
     updateBtn.disabled = true;
@@ -2435,72 +2435,69 @@ function bindVersionCard() {
 
     const note = $('verNote');
 
-    // ── 所有定时器集中管理 ──
-    let countdown = null;
+    let done = false;
+    let busy = false;
     let poller = null;
     let deadline = null;
-    let busy = false;        // 轮询防重入
-    let done = false;        // 终态，阻止一切后续回调
 
-    function setStatus(text, cls) {
+    /**
+     * 单一状态机：只有 render() 写 DOM，轮询只改 state。
+     * （曾经两个定时器各自写文案，两个不同字符串交替覆盖，表现为闪烁。）
+     */
+    let state = 'submitted';
+
+    const LABELS = {
+      submitted: '已提交，宿主机正在执行…',
+      pulling: '正在拉取代码…',
+      building: '代码已更新，正在重建容器…',
+      rebuilding: '正在重建容器…（面板短暂断连属正常）',
+    };
+
+    function render() {
       if (done) return;
-      if (note.textContent === text) return;   // 内容没变不碰 DOM，避免闪烁
+      const text = LABELS[state] || LABELS.submitted;
+      if (note.textContent === text) return;
       note.textContent = text;
-      if (cls) note.className = 'ver-note ' + cls;
+      note.className = 'ver-note warn';
     }
 
     function stopAll() {
       done = true;
-      if (countdown) { clearInterval(countdown); countdown = null; }
       if (poller) { clearInterval(poller); poller = null; }
       if (deadline) { clearTimeout(deadline); deadline = null; }
     }
 
-    /** 强制刷新：加时间戳参数绕过浏览器对 index.html 的缓存 */
-    function finishAndReload() {
+    function finish(text, cls) {
       if (done) return;
-      setStatus('更新完成，正在刷新…', 'ok');
       stopAll();
-      const url = new URL(location.href);
-      url.searchParams.set('_', Date.now());
-      setTimeout(() => location.replace(url.toString()), 600);
-    }
-
-    /** 结束但不刷新（无需重建 / 失败） */
-    function finishIdle(text, cls) {
-      if (done) return;
-      setStatus(text, cls);
-      stopAll();
+      note.textContent = text;
+      note.className = 'ver-note ' + cls;
       updateBtn.hidden = false;
       updateBtn.disabled = false;
       updateBtn.textContent = '立即更新';
     }
 
+    function reload() {
+      if (done) return;
+      stopAll();
+      note.textContent = '更新完成，正在刷新…';
+      note.className = 'ver-note ok';
+      const url = new URL(location.href);
+      url.searchParams.set('_', Date.now());
+      setTimeout(() => location.replace(url.toString()), 500);
+    }
+
     try {
       await api('/api/admin/update', { method: 'POST' });
       updateBtn.hidden = true;
+      render();
 
-      // 基线：更新开始时的版本状态
       let baseDeployed = null;
       let baseSha = null;
-      let sawPending = false;
       let wentDown = false;
 
-      // 阶段 1：倒计时等 cron 接手
-      let left = 75;
-      setStatus(`已提交，等待宿主机接手… ${left}s`, 'warn');
-      countdown = setInterval(() => {
-        left -= 1;
-        if (left <= 0) {
-          clearInterval(countdown);
-          countdown = null;
-          setStatus('宿主机尚未接手，继续等待…', 'warn');
-          return;
-        }
-        setStatus(`已提交，等待宿主机接手… ${left}s`, 'warn');
-      }, 1000);
-
-      // 阶段 2：轮询判断推进
+      // 宿主机用 systemd path 监听触发文件，通常 1-2 秒内就开工，
+      // 所以这里不需要倒计时，直接观察版本推进。
       poller = setInterval(async () => {
         if (done || busy) return;
         busy = true;
@@ -2517,53 +2514,38 @@ function bindVersionCard() {
             baseDeployed = v.deployedSha || '';
             baseSha = v.sha || '';
           }
-
           const curDeployed = v.deployedSha || '';
           const curSha = v.sha || '';
 
-          // 断连恢复 → 重建完成
-          if (wentDown) { finishAndReload(); return; }
+          if (wentDown) { reload(); return; }
 
-          if (v.pending?.pending) {
-            sawPending = true;
-            setStatus('宿主机已接手，正在更新…', 'warn');
-            return;
-          }
+          if (v.pending?.pending) { state = 'submitted'; render(); return; }
 
           const codeMoved = curDeployed && baseDeployed && curDeployed !== baseDeployed;
           const imageMoved = curSha && baseSha && curSha !== baseSha;
 
-          // 代码和镜像都变了 = 真正完成
-          if (codeMoved && imageMoved) { finishAndReload(); return; }
+          if (codeMoved && imageMoved) { reload(); return; }
+          if (codeMoved) { state = 'building'; render(); return; }
 
-          // 代码变了但镜像没变 = 构建中
-          if (codeMoved) {
-            setStatus('代码已更新，正在重建容器…', 'warn');
+          // 没有推进：可能是"已是最新，无需重建"
+          if (!codeMoved && v.upToDate === true && v.needsRebuild === false) {
+            finish('已是最新，无需重建', 'ok');
             return;
           }
 
-          // 见过 pending 但还没推进 = 处理中
-          if (sawPending) {
-            setStatus('正在拉取代码…', 'warn');
-            return;
-          }
-
-          // 从未见过 pending，且版本没动：cron 还没轮到，或本来就没有新提交
-          setStatus('等待宿主机接手…', 'warn');
+          state = 'pulling';
+          render();
         } catch {
-          // 连不上 = 容器正在重建
           wentDown = true;
-          if (countdown) { clearInterval(countdown); countdown = null; }
-          setStatus('正在重建容器…（面板短暂断连属正常）', 'warn');
+          state = 'rebuilding';
+          render();
         } finally {
           busy = false;
         }
-      }, 2000);
+      }, 1000);
 
-      // 兜底：6 分钟后放弃（冷缓存构建可能超过 3 分钟）
       deadline = setTimeout(() => {
-        if (done) return;
-        finishIdle('更新超时，请查看服务器日志或手动执行 scripts/auto-update.sh', 'err');
+        finish('更新超时，请查看服务器日志', 'err');
       }, 360000);
     } catch (e) {
       stopAll();
@@ -2571,7 +2553,7 @@ function bindVersionCard() {
       updateBtn.disabled = false;
       updateBtn.textContent = '立即更新';
     }
-  };;
+  };;;;
 }
 
 bindVersionCard();

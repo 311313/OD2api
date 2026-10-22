@@ -151,7 +151,8 @@ export function startVersionPolling() {
 export function requestUpdate(cfg, by = 'panel') {
   const p = path.join(cfg.dataDir, '.update-request');
   const at = new Date().toISOString();
-  const payload = JSON.stringify({ at, by });
+  // pid 让宿主机侧日志能对应到是哪次请求
+  const payload = JSON.stringify({ at, by, pid: process.pid });
   // 原子写：宿主机脚本会 rm 这个文件，直接 writeFileSync 的 truncate
   // 窗口里被删掉的话，写入会落进已 unlink 的 inode，请求凭空消失。
   const tmp = `${p}.${process.pid}.tmp`;
