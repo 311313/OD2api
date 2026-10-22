@@ -29,13 +29,15 @@
       - ./data:/app/data
     networks:
       - default
-      # 鍙€夛細鎺ュ叆涓嬫父缃戝叧鐨?docker 缃戠粶锛屼娇鍏惰兘鐢ㄥ鍣ㄥ悕鐩磋繛銆?
-      # 缃戠粶鍚嶉€氳繃鐜鍙橀噺娉ㄥ叆锛屼笉鍐欐浠讳綍鍏蜂綋閮ㄧ讲鎷撴墤銆?
-      #   http://opendesign2api:7890/v1
-      - ${UPSTREAM_NETWORK:-dummy}
+      # 可选：接入下游网关所在的 docker 网络，使其能用容器名直连本网关。
+      # 网络名由 .env 的 UPSTREAM_NETWORK 提供；留空则只挂在 default 上。
+      - upstream
 
 networks:
-  # 鐢变笅娓哥綉鍏崇殑 compose 鍒涘缓锛涘悕瀛楄蛋鐜鍙橀噺锛屼笉鐭ラ亾鏃舵寕涓€涓┖缃戠粶鍗犱綅
+  default:
+    name: opendesign2api_default
   upstream:
-    name: ${UPSTREAM_NETWORK:-od2api-dummy}
+    # 留空时 compose 会拒绝启动，所以给一个确定不存在的名字 + external，
+    # 只有 .env 里显式设置 UPSTREAM_NETWORK 时才真正接入。
+    name: ${UPSTREAM_NETWORK:-opendesign2api_standalone}
     external: true
