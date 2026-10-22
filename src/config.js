@@ -11,6 +11,18 @@ function bool(value, fallback) {
 }
 
 /**
+ * 浮点配置。
+ *
+ * 不能直接用 Number(env.X || 默认)：
+ * 环境变量写成 abc 会得到 NaN，而 NaN 参与比较恒为 false，
+ * 会让余额门槛、TTL 失效这类判断静默失效 —— 比报错更难查。
+ */
+function num(value, fallback) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+/**
  * 网关配置。全部来自环境变量，容器部署时通过 compose environment 注入。
  * 不在这里放任何上游默认值 —— 上游地址属于账号数据，不是网关配置。
  */
@@ -47,37 +59,37 @@ export function loadConfig(env = process.env) {
     rewriteModelName: bool(env.REWRITE_MODEL_NAME, true),
 
     // 余额低于该值（USD）时暂停使用该号
-    minBalanceUsd: Number(env.MIN_BALANCE_USD || '0.0005'),
+    minBalanceUsd: num(env.MIN_BALANCE_USD || '0.0005', 0.0005),
 
     // 单价：美元 / 百万 token。
     // 实测 deepseek-v4.1-flash：大样本校准（5929 token / $0.0071，量化误差 ±1.4%）
     //   → $1.1975 / 1M tokens（≈ 官方标价 $1.20/M）
     // 换模型后在设置页改「每百万 token 单价」即可，不用改代码。
-    usdPerMillionTokens: Number(env.USD_PER_MILLION_TOKENS || '1.1975'),
+    usdPerMillionTokens: num(env.USD_PER_MILLION_TOKENS || '1.1975', 1.1975),
 
     // 每个账号的并发上限。0 = 不限。
     // 上游有 RPM 限制，超了会 429 进而把号打进冷却，所以默认给一个保守值。
-    perAccountConcurrency: Number(env.PER_ACCOUNT_CONCURRENCY || '8'),
+    perAccountConcurrency: num(env.PER_ACCOUNT_CONCURRENCY || '8', 8),
 
     // 同一账号两次请求的最小间隔（毫秒）。0 = 不限。
     // 风控最容易识别「匀速高频」；给一个间隔下限能让调用曲线更像真人。
     // 默认 800ms ≈ 每账号每分钟最多 75 次，远低于常见 RPM 限制。
-    minRequestGapMs: Number(env.MIN_REQUEST_GAP_MS || '800'),
+    minRequestGapMs: num(env.MIN_REQUEST_GAP_MS || '800', 800),
 
     // 每账号每日请求上限。0 = 不限。
     // 目的不是省钱，是让流量在号池里分散——单号扛太多流量在上游看来就是异常账号。
     // 1500 次/天 ≈ 每分钟 1 次，接近一个重度的真人用户。
-    dailyRequestCap: Number(env.DAILY_REQUEST_CAP || '1500'),
+    dailyRequestCap: num(env.DAILY_REQUEST_CAP || '1500', 1500),
 
     // ── 会话粘性 ───────────────────────────────────────────
     // 空闲多久后解绑（毫秒）。这个会话没被用到就放开账号。
     // 正在进行的对话每次请求都会续期，不会被踢。
-    stickyTtlMs: Number(env.STICKY_TTL_MS || '1800000'),
+    stickyTtlMs: num(env.STICKY_TTL_MS || '1800000', 1800000),
     // 单个绑定最长保持多久（毫秒）。0 = 不限。
     // 上游 prompt cache 也有 TTL，粘性比它长没有意义。
-    stickyMaxLifetimeMs: Number(env.STICKY_MAX_LIFETIME_MS || '0'),
+    stickyMaxLifetimeMs: num(env.STICKY_MAX_LIFETIME_MS || '0', 0),
     // GC 扫描周期（毫秒）
-    stickyGcIntervalMs: Number(env.STICKY_GC_INTERVAL_MS || '300000'),
+    stickyGcIntervalMs: num(env.STICKY_GC_INTERVAL_MS || '300000', 300000),
 
     // 上游 UA。**不要设成 Go-http-client/1.1** —— Cloudflare WAF 会直接 403。
     // 原因是 Cloudflare 用 UA + TLS 指纹组合判定：真实客户端是 Go 程序、
